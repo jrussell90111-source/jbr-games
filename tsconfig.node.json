@@ -1,0 +1,14 @@
+// tsconfig.node.json
+{
+  "compilerOptions": {
+    "composite": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "lib": ["ES2020", "DOM", "WebWorker"]
+  },
+  "include": ["vite.config.ts", "vite.config.js", "src/global.d.ts"]
+}
+
