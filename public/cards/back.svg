@@ -1,0 +1,101 @@
+<!--?xml version="1.0" encoding="UTF-8"?-->
+<svg width="750" height="1050" viewBox="0 0 750 1050" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Card Back — JBR Games
+    Aspect ratio: 5:7 (750x1050)
+    Colors:
+      Steel Blue base: #4682B4
+      Lighter lines:   #6FA6CF
+      Darker border:   #2F5677
+  -->
+
+  <defs>
+    <!-- Diamond grid pattern (rotated 45°) -->
+    <pattern id="diamondGrid" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="rotate(45 20 20)">
+      <rect width="40" height="40" fill="none"></rect>
+      <!-- crosshair lines to form diamonds after rotation -->
+      <path d="M0 20 H40 M20 0 V40" stroke="#6FA6CF" stroke-width="2" opacity="0.65"></path>
+    </pattern>
+
+    <!-- Center rosette: repeated ellipses rotated around center -->
+    <g id="rosette">
+      <!-- A single vertical ellipse; the group using it will rotate copies -->
+      <ellipse cx="0" cy="-160" rx="20" ry="105" fill="none" stroke="#6FA6CF" stroke-width="2" opacity="0.7"></ellipse>
+    </g>
+
+    <!-- Mask that knocks OUT the text from the blue artwork (revealing white below) -->
+    <mask id="textKnockout" maskUnits="objectBoundingBox" maskContentUnits="userSpaceOnUse">
+      <!-- White = keep artwork; Black = cut a hole to show the background -->
+      <rect x="0" y="0" width="750" height="1050" fill="white"></rect>
+      <text x="375" y="525" font-family="system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial" font-size="96" font-weight="800" text-anchor="middle" dominant-baseline="middle" fill="black" letter-spacing="1.5">jbr games</text>
+    </mask>
+  </defs>
+
+  <!-- White background (shows through the knocked-out text) -->
+  <rect x="0" y="0" width="750" height="1050" rx="36" ry="36" fill="white"></rect>
+
+  <!-- Artwork group with knockout mask applied -->
+  <g mask="url(#textKnockout)">
+    <!-- Steel blue base with rounded corners -->
+    <rect x="18" y="18" width="714" height="1014" rx="32" ry="32" fill="#4682B4"></rect>
+
+    <!-- Diamond grid overlay (transparent background, light lines) -->
+    <rect x="18" y="18" width="714" height="1014" rx="32" ry="32" fill="url(#diamondGrid)"></rect>
+
+    <!-- Concentric guilloché rings for a classic back look -->
+    <g transform="translate(375,525)">
+      <circle r="300" fill="none" stroke="#6FA6CF" stroke-width="2" opacity="0.65"></circle>
+      <circle r="270" fill="none" stroke="#6FA6CF" stroke-width="1.5" stroke-dasharray="4 6" opacity="0.6"></circle>
+      <circle r="240" fill="none" stroke="#6FA6CF" stroke-width="2" opacity="0.65"></circle>
+      <circle r="210" fill="none" stroke="#6FA6CF" stroke-width="1.5" stroke-dasharray="3 5" opacity="0.55"></circle>
+      <circle r="180" fill="none" stroke="#6FA6CF" stroke-width="2" opacity="0.65"></circle>
+
+      <!-- Rosette: rotate the petal 32 times for symmetry -->
+      <g opacity="0.85">
+        <!-- Change '32' to a different count for more/less petals -->
+        <!-- We manually place rotations for portability -->
+        <g>
+          <use href="#rosette" transform="rotate(0)"></use>
+          <use href="#rosette" transform="rotate(11.25)"></use>
+          <use href="#rosette" transform="rotate(22.5)"></use>
+          <use href="#rosette" transform="rotate(33.75)"></use>
+          <use href="#rosette" transform="rotate(45)"></use>
+          <use href="#rosette" transform="rotate(56.25)"></use>
+          <use href="#rosette" transform="rotate(67.5)"></use>
+          <use href="#rosette" transform="rotate(78.75)"></use>
+          <use href="#rosette" transform="rotate(90)"></use>
+          <use href="#rosette" transform="rotate(101.25)"></use>
+          <use href="#rosette" transform="rotate(112.5)"></use>
+          <use href="#rosette" transform="rotate(123.75)"></use>
+          <use href="#rosette" transform="rotate(135)"></use>
+          <use href="#rosette" transform="rotate(146.25)"></use>
+          <use href="#rosette" transform="rotate(157.5)"></use>
+          <use href="#rosette" transform="rotate(168.75)"></use>
+          <use href="#rosette" transform="rotate(180)"></use>
+          <use href="#rosette" transform="rotate(191.25)"></use>
+          <use href="#rosette" transform="rotate(202.5)"></use>
+          <use href="#rosette" transform="rotate(213.75)"></use>
+          <use href="#rosette" transform="rotate(225)"></use>
+          <use href="#rosette" transform="rotate(236.25)"></use>
+          <use href="#rosette" transform="rotate(247.5)"></use>
+          <use href="#rosette" transform="rotate(258.75)"></use>
+          <use href="#rosette" transform="rotate(270)"></use>
+          <use href="#rosette" transform="rotate(281.25)"></use>
+          <use href="#rosette" transform="rotate(292.5)"></use>
+          <use href="#rosette" transform="rotate(303.75)"></use>
+          <use href="#rosette" transform="rotate(315)"></use>
+          <use href="#rosette" transform="rotate(326.25)"></use>
+          <use href="#rosette" transform="rotate(337.5)"></use>
+          <use href="#rosette" transform="rotate(348.75)"></use>
+        </g>
+      </g>
+
+      <!-- Inner badge ring -->
+      <circle r="115" fill="none" stroke="#6FA6CF" stroke-width="2" opacity="0.7"></circle>
+      <circle r="100" fill="none" stroke="#6FA6CF" stroke-width="1.5" stroke-dasharray="2 6" opacity="0.6"></circle>
+    </g>
+
+    <!-- Darker border inside the card edge -->
+    <rect x="18" y="18" width="714" height="1014" rx="32" ry="32" fill="none" stroke="#2F5677" stroke-width="12" opacity="0.9"></rect>
+  </g>
+</svg>

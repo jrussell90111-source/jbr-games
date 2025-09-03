@@ -1,0 +1,29 @@
+// src/games/spec.ts
+import type { Card } from '../cards'
+
+export type HandName =
+  // Jacks or Better
+  | 'Royal Flush' | 'Straight Flush' | 'Four of a Kind' | 'Full House'
+  | 'Flush' | 'Straight' | 'Three of a Kind' | 'Two Pair' | 'Jacks or Better'
+  | 'Nothing'
+  // Deuces Wild
+  | 'Natural Royal Flush' | 'Four Deuces' | 'Wild Royal Flush'
+  | 'Five of a Kind'
+
+export type Paytable = Record<HandName, [number, number, number, number, number]>
+
+// NEW: bestHold can return a mask or a {mask, reason}
+export type BestHoldResult = boolean[] | { mask: boolean[]; reason?: string }
+export type BestHoldFn = (hand: Card[]) => BestHoldResult
+
+export interface GameSpec {
+  id: 'JOB_8_5' | 'DW_25_16_13' | (string & {})
+  title: string
+  handOrder: HandName[]
+  paytable: Paytable
+  evaluateHand(hand: Card[]): HandName
+  bestHold: BestHoldFn
+  coaching?: 'on' | 'off'
+  notes?: string
+}
+
