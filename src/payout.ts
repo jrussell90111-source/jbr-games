@@ -18,3 +18,12 @@ export function payoutFor(rank: HandRank, bet: number) {
   return PAYTABLE_8_5[rank][clamped-1]
 }
 
+export type Paytable = Record<string, [number, number, number, number, number]>
+
+export function payoutForRank(paytable: Paytable, rank: string, bet: number): number {
+  const row = (paytable as any)[rank] as number[] | undefined
+  if (!row) return 0
+  const idx = Math.min(4, Math.max(0, bet - 1))
+  return row[idx] ?? 0
+}
+

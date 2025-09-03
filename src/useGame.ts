@@ -1,19 +1,25 @@
 import { useEffect, useState } from 'react'
 import { Card, newDeck } from './cards'
-import { evaluateHand, type HandRank } from './evaluate'
-import { payoutFor } from './payout'
+import { audio } from './audio'
+import type { GameSpec, BestHoldResult } from './games/spec'
 
 type Phase = 'bet' | 'deal' | 'draw' | 'show'
 const COIN_VALUE_DOLLARS = 1
 
-const BANK_KEY = 'bank_balance'
-const CREDITS_KEY = 'credits'
-const P_IN_KEY = 'bank_in_total'
-const P_OUT_KEY= 'bank_out_total'
-const REWARDS_KEY = 'rewards_points'
+// Shared money/bank keys (same for all games)
+const BANK_KEY        = 'bank_balance'
+const CREDITS_KEY     = 'credits'
+const P_IN_KEY        = 'bank_in_total'
+const P_OUT_KEY       = 'bank_out_total'
+const REWARDS_KEY     = 'rewards_points'
 const REWARDS_REM_KEY = 'rewards_remainder'
-const ACC_CORRECT_KEY = 'acc_correct'
-const ACC_TOTAL_KEY = 'acc_total'
+
+// Animation default speeds (ms per card)
+const DEFAULT_DEAL_MS = 360
+const DEFAULT_DRAW_MS = 300
+
+// Sound behavior for draw animation
+const PLAY_SOUND_ON_BACK_FLASH = false; // keep silent during back-flip
 
 function readNum(key: string, def = 0) {
   const n = Number(localStorage.getItem(key))
@@ -22,79 +28,173 @@ function readNum(key: string, def = 0) {
 function writeNum(key: string, val: number) {
   localStorage.setItem(key, String(val))
 }
-
-/* ========= Strongly-typed helpers for keys/entries ========= */
-function typedKeys<T extends Record<string, any>>(obj: T) {
-  return Object.keys(obj) as Array<keyof T>
+function maskEquals(a: boolean[], b: boolean[]) {
+  for (let i = 0; i < 5; i++) if (!!a[i] !== !!b[i]) return false
+  return true
 }
-function typedEntries<T extends Record<string, any>>(obj: T) {
-  return Object.entries(obj) as Array<[keyof T, T[keyof T]]>
+/** Compute payout from the spec’s paytable; returns 0 for “Nothing”. */
+function payoutFromSpec(spec: GameSpec, rank: string, bet: number): number {
+  const row = (spec.paytable as Record<string, number[]>)[rank]
+  if (!row) return 0
+  const idx = Math.min(5, Math.max(1, bet)) - 1
+  return row[idx] ?? 0
 }
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
-export function useGame() {
-  // Credits managed by the game
+export function useGame(spec: GameSpec) {
+  // Per-game keys (namespaced by spec.id)
+  const ACC_CORRECT_KEY = `acc_correct:${spec.id}`
+  const ACC_TOTAL_KEY   = `acc_total:${spec.id}`
+  const HINTS_KEY       = `hintsOn:${spec.id}`
+
+  // Rehydrate per-game state whenever we switch games
+  useEffect(() => {
+    // accuracy (per game)
+    setAccCorrect(readNum(`acc_correct:${spec.id}`, 0))
+    setAccTotal(readNum(`acc_total:${spec.id}`, 0))
+
+    // hints toggle (per game)
+    {
+      const s = localStorage.getItem(`hintsOn:${spec.id}`)
+      setHintsEnabled(s === null ? true : s === 'true')
+    }
+
+    // clear any lingering UI from the previous table
+    setPromptedThisRound(false)
+    setSuggestion(null)
+    setSuggestionWhy(null)
+    setHand([])                          // show backs
+    setHolds([false,false,false,false,false])
+    setPhase('bet')
+    setInitialRank(null)
+    setResult(null)
+
+    // if you have revealMask in your version:
+    try { setRevealMask([false,false,false,false,false] as any) } catch {}
+  }, [spec.id])
+
+  // --- New: per-game accuracy reset
+  function resetAccuracy() {
+    setAccCorrect(0)
+    setAccTotal(0)
+    writeNum(ACC_CORRECT_KEY, 0)
+    writeNum(ACC_TOTAL_KEY, 0)
+    window.dispatchEvent(new Event('app:accuracy'))
+  }
+
+  // --- New: rewards reset (global rewards program)
+  function resetRewards() {
+    setRewardsPoints(0)
+    setRewardsRemainderDollars(0)
+    writeNum(REWARDS_KEY, 0)
+    writeNum(REWARDS_REM_KEY, 0)
+    window.dispatchEvent(new Event('app:rewards'))
+  }
+
+  // Versioned, per-game speed keys
+  const SPEED_VER = 'v2'
+  const DEAL_MS_KEY = `deal_interval_ms:${SPEED_VER}:${spec.id}`
+  const DRAW_MS_KEY = `draw_interval_ms:${SPEED_VER}:${spec.id}`
+
+  // Credits & gameplay
   const [credits, setCredits] = useState<number>(() => readNum(CREDITS_KEY, 200))
   const [bet, setBet] = useState(1)
   const [deck, setDeck] = useState<Card[]>(newDeck())
   const [hand, setHand] = useState<Card[]>([])
   const [holds, setHolds] = useState<boolean[]>([false,false,false,false,false])
   const [phase, setPhase] = useState<Phase>('bet')
-  const [result, setResult] = useState<{rank: HandRank, payout: number} | null>(null)
-  const [initialRank, setInitialRank] = useState<HandRank | null>(null)
 
-  // Rewards (summary only)
+  // Animation & reveal state
+  const [isAnimating, setIsAnimating] = useState(false)
+  const [revealMask, setRevealMask] = useState<boolean[]>([false,false,false,false,false])
+  const [dealIntervalMs, setDealIntervalMs] = useState<number>(() => readNum(DEAL_MS_KEY, DEFAULT_DEAL_MS))
+  const [drawIntervalMs, setDrawIntervalMs] = useState<number>(() => readNum(DRAW_MS_KEY, DEFAULT_DRAW_MS))
+  useEffect(() => { writeNum(DEAL_MS_KEY, dealIntervalMs) }, [DEAL_MS_KEY, dealIntervalMs])
+  useEffect(() => { writeNum(DRAW_MS_KEY, drawIntervalMs) }, [DRAW_MS_KEY, drawIntervalMs])
+
+  // Results
+  const [result, setResult] = useState<{rank: string, payout: number} | null>(null)
+  const [initialRank, setInitialRank] = useState<string | null>(null)
+
+  // Rewards (summary)
   const [rewardsPoints, setRewardsPoints] = useState<number>(() => readNum(REWARDS_KEY, 0))
   const [rewardsRemainderDollars, setRewardsRemainderDollars] = useState<number>(() => readNum(REWARDS_REM_KEY, 0))
 
-  // Coaching state
+  // Coaching state (+ reasons)
   const [promptedThisRound, setPromptedThisRound] = useState(false)
-  const [suggestion, setSuggestion] = useState<boolean[] | null>(null) // recommended holds
+  const [suggestion, setSuggestion] = useState<boolean[] | null>(null)
+  const [suggestionWhy, setSuggestionWhy] = useState<string | null>(null)
 
-  // Accuracy stats
+  // Hints toggle — per game (persisted)
+  const [hintsEnabled, setHintsEnabled] = useState<boolean>(() => {
+    const s = localStorage.getItem(HINTS_KEY)
+    return s === null ? true : s === 'true'
+  })
+  useEffect(() => { localStorage.setItem(HINTS_KEY, String(hintsEnabled)) }, [HINTS_KEY, hintsEnabled])
+
+  // Accuracy — per game (persisted)
   const [accCorrect, setAccCorrect] = useState<number>(() => readNum(ACC_CORRECT_KEY, 0))
   const [accTotal, setAccTotal] = useState<number>(() => readNum(ACC_TOTAL_KEY, 0))
 
   // Persist + broadcast
-  useEffect(()=>{ 
+  useEffect(() => {
     writeNum(CREDITS_KEY, credits)
     window.dispatchEvent(new CustomEvent('app:credits', { detail: credits }))
   }, [credits])
-  useEffect(()=>{ writeNum(REWARDS_KEY, rewardsPoints); window.dispatchEvent(new Event('app:rewards')) }, [rewardsPoints])
-  useEffect(()=>{ writeNum(REWARDS_REM_KEY, rewardsRemainderDollars) }, [rewardsRemainderDollars])
-  useEffect(()=>{ writeNum(ACC_CORRECT_KEY, accCorrect) }, [accCorrect])
-  useEffect(()=>{ writeNum(ACC_TOTAL_KEY, accTotal) }, [accTotal])
+  useEffect(() => { writeNum(REWARDS_KEY, rewardsPoints); window.dispatchEvent(new Event('app:rewards')) }, [rewardsPoints])
+  useEffect(() => { writeNum(REWARDS_REM_KEY, rewardsRemainderDollars) }, [rewardsRemainderDollars])
+  useEffect(() => { writeNum(ACC_CORRECT_KEY, accCorrect) }, [ACC_CORRECT_KEY, accCorrect])
+  useEffect(() => { writeNum(ACC_TOTAL_KEY, accTotal) }, [ACC_TOTAL_KEY, accTotal])
 
-  // (Optional) listen for external credits changes
-  useEffect(()=>{
-    const onCredits = (e: Event) => {
-      const detail = (e as CustomEvent<number>).detail
-      if (typeof detail === 'number') setCredits(detail)
-    }
-    window.addEventListener('app:credits', onCredits as EventListener)
-    return () => window.removeEventListener('app:credits', onCredits as EventListener)
-  }, [])
-
-  useEffect(()=>{
+  // Listen for external accuracy resets (from BankPanel)
+  useEffect(() => {
     const onAccuracy = () => {
-      const c = readNum(ACC_CORRECT_KEY, 0)
-      const t = readNum(ACC_TOTAL_KEY, 0)
-      setAccCorrect(c)
-      setAccTotal(t)
+      setAccCorrect(readNum(ACC_CORRECT_KEY, 0))
+      setAccTotal(readNum(ACC_TOTAL_KEY, 0))
     }
     window.addEventListener('app:accuracy', onAccuracy)
     return () => window.removeEventListener('app:accuracy', onAccuracy)
-  }, [])
+  }, [ACC_CORRECT_KEY, ACC_TOTAL_KEY])
+
+  // Reset suggestion UI when spec changes
+  useEffect(() => {
+    setPromptedThisRound(false)
+    setSuggestion(null)
+    setSuggestionWhy(null)
+  }, [spec.id])
+
+  // 🔹 Show backs when switching games: reset board on spec change
+  useEffect(() => {
+    setHand([])
+    setHolds([false,false,false,false,false])
+    setPhase('bet')
+    setResult(null)
+    setInitialRank(null)
+    setRevealMask([false,false,false,false,false])
+  }, [spec.id])
+
+  // 🔹 Show backs when credits hit zero (out of cash)
+  useEffect(() => {
+    if (credits === 0 && (phase === 'bet' || phase === 'show')) {
+      setHand([])
+      setHolds([false,false,false,false,false])
+      setResult(null)
+      setInitialRank(null)
+      setRevealMask([false,false,false,false,false])
+    }
+  }, [credits, phase])
 
   // UI helpers
   function toggleHold(i: number) {
+    if (isAnimating) return
     if (phase !== 'deal' && phase !== 'draw') return
     setHolds(h => h.map((v,idx)=> idx===i ? !v : v))
   }
-  function changeBet(delta: number){ setBet(b => Math.min(5, Math.max(1, b + delta))) }
-  function setMaxBet(){ setBet(5) }
+  function changeBet(delta: number) { if (!isAnimating) setBet(b => Math.min(5, Math.max(1, b + delta))) }
+  function setMaxBet() { if (!isAnimating) setBet(5) }
 
   // --- Money actions (in-game) ---
-  function insert(amount: number){
+  function insert(amount: number) {
     if (amount <= 0) return
     const bank = readNum(BANK_KEY, 500)
     const m = Math.min(amount, bank)
@@ -105,7 +205,7 @@ export function useGame() {
     window.dispatchEvent(new Event('app:bank'))
     window.dispatchEvent(new Event('app:bank_totals'))
   }
-  function cashOutAll(){
+  function cashOutAll() {
     if (credits <= 0) return
     const bank = readNum(BANK_KEY, 500)
     const m = credits
@@ -113,13 +213,14 @@ export function useGame() {
     setCredits(0)
     writeNum(P_OUT_KEY, readNum(P_OUT_KEY, 0) + m)
     setHand([]); setHolds([false,false,false,false,false]); setPhase('bet'); setResult(null); setInitialRank(null)
+    setRevealMask([false,false,false,false,false])
     window.dispatchEvent(new Event('app:bank'))
     window.dispatchEvent(new Event('app:bank_totals'))
   }
 
-  // Start a hand
-  function deal() {
-    if (!canDeal) return
+  // Start a hand — sequential deal with left→right reveal
+  async function deal(): Promise<void> {
+    if (!canDeal || isAnimating) return
     setCredits(c => c - bet)
 
     // Rewards: +1pt / $10 wagered
@@ -132,87 +233,151 @@ export function useGame() {
     })
 
     let d = deck.length < 10 ? newDeck() : deck.slice()
-    const newHand = d.slice(0,5)
+    const drawn = d.slice(0,5)
     d = d.slice(5)
-    setDeck(d); setHand(newHand); setHolds([false,false,false,false,false])
-    setPhase('deal'); setResult(null)
-    setPromptedThisRound(false); setSuggestion(null)
+    setDeck(d)
 
-    const r = evaluateHand(newHand)
-    setInitialRank(r !== 'Nothing' ? r : null)
+    // Prepare board: assign full hand, hide with backs
+    setHand(drawn)
+    setHolds([false,false,false,false,false])
+    setPhase('deal'); setResult(null)
+    setPromptedThisRound(false); setSuggestion(null); setSuggestionWhy(null)
+    setInitialRank(null)
+    setRevealMask([false,false,false,false,false])
+
+    // sequential reveal L→R
+    setIsAnimating(true)
+    for (let i = 0; i < 5; i++) {
+      setRevealMask(m => { const next = m.slice(); next[i] = true; return next })
+      try { audio.click() } catch {}
+      if (i < 4) await sleep(Math.max(0, dealIntervalMs))
+    }
+    // compute initial rank after all 5 visible
+    const r = spec.evaluateHand(drawn as Card[])
+    setInitialRank(r !== 'Nothing' ? String(r) : null)
+    setIsAnimating(false)
   }
 
-  // Draw with deterministic coach
-  function draw() {
-    if (!canDraw) return
+  /** Shared animation for a draw step using a specific "kept" mask. */
+  async function animateDrawWithMask(keepMask: boolean[], countAsPrompted: boolean) {
+    if (isAnimating) return
 
-    // If we haven't prompted yet, check optimality first (deterministic chart)
-    if (!promptedThisRound) {
-      const bestMask = bestHoldByChart(hand)
-      const masksEqual = masksEquivalentForCoaching(hand, bestMask, holds)
-      if (!masksEqual) {
-        setSuggestion(bestMask)
-        setPromptedThisRound(true)
-        return // wait for user choice
-      } else {
-        // Correct play (no correction offered)
-        setAccTotal(t => t + 1)
-        setAccCorrect(c => c + 1)
-      }
-    } else {
-      // Prompt already shown this round → record as a "correction offered" round (0 points)
-      setAccTotal(t => t + 1)
+    // Build final hand, indices to replace, and replacement cards
+    const toReplace: number[] = []
+    let d = deck.slice()
+    const finalHand = hand.map((c, i) => {
+      if (keepMask[i]) return c
+      toReplace.push(i)
+      return d.shift()!
+    })
+
+    if (toReplace.length === 0) {
+      // No replacements: just finish the hand
+      const rank0 = spec.evaluateHand(finalHand as Card[])
+      const payout0 = payoutFromSpec(spec, String(rank0), bet)
+      setCredits(c => c + payout0)
+      setResult({ rank: String(rank0), payout: payout0 })
+      setPhase('show')
+      setInitialRank(null)
+      setSuggestion(null)
+      setSuggestionWhy(null)
+      setRevealMask([true,true,true,true,true])
+      return
     }
 
-    // Proceed to actual draw
-    let d = deck.slice()
-    const newHand = hand.map((c, i) => holds[i] ? c : d.shift()!)
-    setHand(newHand); setDeck(d)
-    const rank = evaluateHand(newHand)
-    const payout = payoutFor(rank, bet)
+    // Animate replacements:
+    // - first replaced card: no back flash (straight to face)
+    // - subsequent replaced cards: brief back flash so the player sees what's changing
+    const FLASH_BACK_MS = Math.min(120, Math.floor(drawIntervalMs / 2))
+
+    setIsAnimating(true)
+    for (let k = 0; k < toReplace.length; k++) {
+      const i = toReplace[k]
+
+      if (k > 0) {
+        // flash back on later replacements
+        setRevealMask(m => { const next = m.slice(); next[i] = false; return next })
+        if (PLAY_SOUND_ON_BACK_FLASH) {
+          try { audio.click() } catch {}
+        }
+        if (FLASH_BACK_MS > 0) await sleep(FLASH_BACK_MS)
+      }
+
+      // place the new card + reveal - play the click here
+      setHand(h => { const next = h.slice(); next[i] = finalHand[i]; return next })
+      setRevealMask(m => { const next = m.slice(); next[i] = true; return next })
+      try { audio.click() } catch {}
+
+      if (k < toReplace.length - 1 && drawIntervalMs > 0) {
+        await sleep(drawIntervalMs)
+      }
+    }
+    setIsAnimating(false)
+
+    // Commit deck and score
+    setDeck(d)
+    const rank = spec.evaluateHand(finalHand as Card[])
+    const payout = payoutFromSpec(spec, String(rank), bet)
     setCredits(c => c + payout)
-    setResult({ rank, payout })
+    setResult({ rank: String(rank), payout })
     setPhase('show')
     setInitialRank(null)
     setSuggestion(null)
+    setSuggestionWhy(null)
+    setRevealMask([true,true,true,true,true])
+
+    // Accuracy bookkeeping for prompted draws (already incremented earlier in call sites)
+    if (!countAsPrompted) {
+      // nothing extra here; counts are handled by draw()/accept/keepMine
+    }
   }
 
-  // Called by UI if player accepts/declines suggestion
-  function acceptSuggestionAndDraw() {
-    if (!suggestion) return
-    setHolds(suggestion)
-    // After accepting, this round counts as prompted → 0 for accuracy
-    setAccTotal(t => t + 1)
-    // Perform draw immediately with suggested holds
-    let d = deck.slice()
-    const newHand = hand.map((c, i) => suggestion[i] ? c : d.shift()!)
-    setHand(newHand); setDeck(d)
-    const rank = evaluateHand(newHand)
-    const payout = payoutFor(rank, bet)
-    setCredits(c => c + payout)
-    setResult({ rank, payout })
-    setPhase('show')
-    setInitialRank(null)
-    setSuggestion(null)
+  // Draw with spec-provided coaching (with animated replacements + backs)
+  async function draw(): Promise<void> {
+    if (!canDraw || isAnimating) return
+
+    const best: BestHoldResult = spec.bestHold(hand)
+    const primaryMask = Array.isArray(best) ? best : best.mask
+    const alts = (Array.isArray(best) ? undefined : best.alts) ?? []
+    const isOptimal = [primaryMask, ...alts].some(m => maskEquals(m, holds))
+
+    if (hintsEnabled) {
+      if (!promptedThisRound && !isOptimal) {
+        setSuggestion(primaryMask)
+        setSuggestionWhy((Array.isArray(best) ? undefined : best.reason) ?? null)
+        setPromptedThisRound(true)
+        return
+      } else if (!promptedThisRound && isOptimal) {
+        setAccTotal(t => t + 1)
+        setAccCorrect(c => c + 1)
+      } else if (promptedThisRound) {
+        setAccTotal(t => t + 1)
+      }
+    } else {
+      setAccTotal(t => t + 1)
+      if (isOptimal) setAccCorrect(c => c + 1)
+    }
+
+    await animateDrawWithMask(holds, /*countAsPrompted*/ false)
   }
-  function keepMineAndDraw() {
-    // Keeping your play after being prompted → still a 0 for this round
-    setAccTotal(t => t + 1)
-    let d = deck.slice()
-    const newHand = hand.map((c, i) => holds[i] ? c : d.shift()!)
-    setHand(newHand); setDeck(d)
-    const rank = evaluateHand(newHand)
-    const payout = payoutFor(rank, bet)
-    setCredits(c => c + payout)
-    setResult({ rank, payout })
-    setPhase('show')
-    setInitialRank(null)
-    setSuggestion(null)
+
+  // Accept suggestion & draw — now animated like draw()
+  async function acceptSuggestionAndDraw() {
+    if (!suggestion || isAnimating) return
+    setHolds(suggestion)
+    setAccTotal(t => t + 1) // prompted round (0 for correctness)
+    await animateDrawWithMask(suggestion, /*countAsPrompted*/ true)
+  }
+
+  // Keep my holds & draw — now animated like draw()
+  async function keepMineAndDraw() {
+    if (isAnimating) return
+    setAccTotal(t => t + 1) // prompted round (0 for correctness)
+    await animateDrawWithMask(holds, /*countAsPrompted*/ true)
   }
 
   const canDeal = (phase==='bet' || phase==='show') && credits>=bet
-  const canDraw = (phase==='deal' || phase==='draw')
-
+  const canDraw = (phase==='deal' || phase==='draw') && hand.length === 5
   const accuracyPct = accTotal ? Math.round((accCorrect / accTotal) * 100) : 100
 
   return {
@@ -222,256 +387,17 @@ export function useGame() {
     bet, changeBet, setMaxBet, deal, draw, phase, canDeal, canDraw,
     // hand/result
     hand, holds, toggleHold, result, initialRank,
+    // reveal/anim
+    revealMask, isAnimating, dealIntervalMs, drawIntervalMs, setDealIntervalMs, setDrawIntervalMs,
     // rewards summary
     rewardsPoints,
     // coaching UI
-    suggestion, promptedThisRound, acceptSuggestionAndDraw, keepMineAndDraw,
+    hintsEnabled, setHintsEnabled,
+    suggestion, suggestionWhy, promptedThisRound, acceptSuggestionAndDraw, keepMineAndDraw,
     // accuracy
     accCorrect, accTotal, accuracyPct,
+    // reset helpers
+    resetAccuracy, resetRewards,
   }
-}
-
-/* ---------- Deterministic “perfect-play chart” engine for 8/5 JoB ---------- */
-
-function maskEquals(a: boolean[], b: boolean[]) {
-  for (let i=0;i<5;i++) if (!!a[i] !== !!b[i]) return false
-  return true
-}
-
-function masksEquivalentForCoaching(hand: Card[], best: boolean[], current: boolean[]) {
-  // Special-case: Four of a Kind — as long as the player is holding the 4 matching ranks,
-  // consider it correct (whether or not they hold the kicker).
-  const r = evaluateHand(hand)
-  if (r === 'Four of a Kind') {
-    const rankToIdx: Record<string, number[]> = {}
-    hand.forEach((c, i) => {
-      (rankToIdx[c.rank] ??= []).push(i)
-    })
-    const quadIdx = Object.values(rankToIdx).find(arr => arr.length === 4) ?? []
-    const holdingAllFour = quadIdx.every(i => current[i] === true)
-    if (holdingAllFour) return true
-  }
-  // Default: exact mask match
-  return maskEquals(best, current)
-}
-
-const ROYAL_SET = new Set(['10','J','Q','K','A'])
-const RANK_VAL: Record<string, number> = {
-  '2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':11,'Q':12,'K':13,'A':14
-}
-const isHigh = (r: string) => RANK_VAL[r] >= 11 // J/Q/K/A
-
-/** Returns a boolean[5] mask indicating which cards to HOLD, following the priority chart. */
-function bestHoldByChart(hand: Card[]): boolean[] {
-  // Helpers
-  const ranks = hand.map(c => c.rank)
-  const suits = hand.map(c => c.suit)
-  const idxOf = (pred: (c: Card)=>boolean) => hand.map((c,i)=> pred(c)? i : -1).filter(i=>i>=0)
-  const maskFromIdx = (idx: number[]) => [0,1,2,3,4].map(i => idx.includes(i))
-  const countsByRank = countMap(ranks)
-  const countsBySuit = countMap(suits)
-
-  const evalRank = evaluateHand(hand)
-
-  // 1) Pat monsters never break (Royal, Straight Flush, Quads)
-  if (evalRank === 'Royal Flush' || evalRank === 'Straight Flush' || evalRank === 'Four of a Kind') {
-    return [true,true,true,true,true]
-  }
-
-  // 2) Four to a Royal Flush (break high pair if needed)
-  {
-    const bySuit: Record<string, number[]> = {}
-    for (let i=0;i<5;i++){
-      const c = hand[i]
-      if (!ROYAL_SET.has(c.rank)) continue
-      bySuit[c.suit] ??= []
-      bySuit[c.suit].push(i)
-    }
-    for (const s in bySuit) {
-      if (bySuit[s].length === 4) return maskFromIdx(bySuit[s])
-    }
-  }
-
-  // 3) Full House / Flush / Straight / Three of a Kind (hold made hand)
-  if (evalRank === 'Full House' || evalRank === 'Flush' || evalRank === 'Straight') {
-    return [true,true,true,true,true]
-  }
-  if (evalRank === 'Three of a Kind') {
-    const tripRank = typedEntries(countsByRank).find(([, c]) => c === 3)?.[0]
-    if (tripRank != null) {
-      const idx = idxOf(c => c.rank === String(tripRank))
-      return maskFromIdx(idx)
-    }
-  }
-
-  // 4) Four to a Straight Flush (consecutive)
-  {
-    const bySuitIdx: Record<string, number[]> = {}
-    for (let i=0;i<5;i++){
-      const s = hand[i].suit
-      ;(bySuitIdx[s] ??= []).push(i)
-    }
-    for (const s in bySuitIdx) {
-      const idx = bySuitIdx[s]
-      for (const combo of kCombinations(idx, 4)) {
-        const rs = combo.map(i => RANK_VAL[hand[i].rank]).sort((a,b)=>a-b)
-        if (isConsecutiveArray(rs)) return maskFromIdx(combo)
-      }
-    }
-  }
-
-  // 5) Two Pair (hold both pairs)
-  {
-    const pairRanks = typedEntries(countsByRank)
-      .filter(([, c]) => c === 2)
-      .map(([r]) => String(r))
-    if (pairRanks.length === 2) {
-      const idx = idxOf(c => pairRanks.includes(c.rank))
-      return maskFromIdx(idx)
-    }
-  }
-
-  // 6) High Pair (Jacks or Better)
-  {
-    const highPairRank = typedEntries(countsByRank)
-      .find(([r, c]) => c === 2 && isHigh(String(r)))?.[0]
-    if (highPairRank) {
-      const idx = idxOf(c => c.rank === String(highPairRank))
-      return maskFromIdx(idx)
-    }
-  }
-
-  // 7) Three to a Royal Flush (three suited among T,J,Q,K,A)
-  {
-    const bySuitIdx: Record<string, number[]> = {}
-    for (let i=0;i<5;i++){
-      const c = hand[i]
-      if (!ROYAL_SET.has(c.rank)) continue
-      ;(bySuitIdx[c.suit] ??= []).push(i)
-    }
-    for (const s in bySuitIdx) {
-      const idx = bySuitIdx[s].filter(i => ROYAL_SET.has(hand[i].rank))
-      if (idx.length >= 3) {
-        const sorted = idx.sort((a,b)=>RANK_VAL[hand[b].rank]-RANK_VAL[hand[a].rank]).slice(0,3)
-        return maskFromIdx(sorted)
-      }
-    }
-  }
-
-  // 8) Four to a Flush
-  {
-    const suitWith4 = typedEntries(countsBySuit).find(([, c]) => c === 4)?.[0]
-    if (suitWith4) {
-      const idx = idxOf(c => c.suit === String(suitWith4))
-      return maskFromIdx(idx)
-    }
-  }
-
-  // 9) Low Pair (2–10)
-  {
-    const lowPairRank = typedEntries(countsByRank)
-      .find(([r, c]) => c === 2 && !isHigh(String(r)))?.[0]
-    if (lowPairRank) {
-      const idx = idxOf(c => c.rank === String(lowPairRank))
-      return maskFromIdx(idx)
-    }
-  }
-
-  // 10) Four to an Outside Straight (open-ended, e.g., 6-7-8-9). A high only here; no A-2-3-4.
-  {
-    for (const combo of kCombinations([0,1,2,3,4], 4)) {
-      const rs = combo.map(i => RANK_VAL[hand[i].rank]).sort((a,b)=>a-b)
-      if (isStrictConsecutive(rs)) {
-        return maskFromIdx(combo)
-      }
-    }
-  }
-
-  // 11) Two Suited High Cards (JQ, JK, JA, QK, QA, KA)
-  {
-    const suitsSet = new Set(suits)
-    for (const s of suitsSet) {
-      const idxHigh = hand.map((c,i)=> ({i,c})).filter(x => x.c.suit===s && isHigh(x.c.rank)).map(x=>x.i)
-      if (idxHigh.length >= 2) {
-        const pick = idxHigh.sort((a,b)=>RANK_VAL[hand[b].rank]-RANK_VAL[hand[a].rank]).slice(0,2)
-        return maskFromIdx(pick)
-      }
-    }
-  }
-
-  // 12) Three to a Straight Flush (consecutive)
-  {
-    const suitsSet = new Set(suits)
-    for (const s of suitsSet) {
-      const idxSuit = hand.map((c,i)=> ({i,c})).filter(x=>x.c.suit===s).map(x=>x.i)
-      for (const combo of kCombinations(idxSuit, 3)) {
-        const rs = combo.map(i => RANK_VAL[hand[i].rank]).sort((a,b)=>a-b)
-        if (isConsecutiveArray(rs)) return maskFromIdx(combo)
-      }
-    }
-  }
-  // 13) Two Unsuited High Cards (prefer the two *lowest* highs)
-  // Example: A, Q, J (all unsuited) -> choose J + Q (avoid A when a lower pair exists)
-  {
-    const highs = hand.map((c,i)=> ({i,c})).filter(x=>isHigh(x.c.rank))
-    if (highs.length >= 2) {
-      // sort ascending by rank value, then take the lowest two
-      const sorted = highs.sort((a,b)=> RANK_VAL[a.c.rank] - RANK_VAL[b.c.rank])
-      const pick = [sorted[0].i, sorted[1].i]
-      return maskFromIdx(pick)
-    }
-  }
-
-  // 14) One High Card
-  {
-    const idx = hand.map((c,i)=>({i,c})).filter(x=>isHigh(x.c.rank)).sort((a,b)=>RANK_VAL[b.c.rank]-RANK_VAL[a.c.rank]).map(x=>x.i)
-    if (idx.length >= 1) return maskFromIdx([idx[0]])
-  }
-
-  // 15) Three to a Straight Flush (gapped): any 3 suited with span ≤ 4 but not consecutive (inside draw)
-  {
-    const suitsSet = new Set(suits)
-    for (const s of suitsSet) {
-      const idxSuit = hand.map((c,i)=> ({i,c})).filter(x=>x.c.suit===s).map(x=>x.i)
-      for (const combo of kCombinations(idxSuit, 3)) {
-        const rs = combo.map(i => RANK_VAL[hand[i].rank]).sort((a,b)=>a-b)
-        const span = rs[2] - rs[0]
-        if (!isConsecutiveArray(rs) && span <= 4) {
-          return maskFromIdx(combo)
-        }
-      }
-    }
-  }
-
-  // 16) Toss Everything
-  return [false,false,false,false,false]
-}
-
-/* ---------- small utilities ---------- */
-
-function countMap<T extends string>(arr: T[]): Record<T, number> {
-  const m = {} as Record<T, number>
-  for (const v of arr) m[v] = (m[v] ?? 0) + 1
-  return m
-}
-
-function kCombinations<T>(arr: T[], k: number): T[][] {
-  const res: T[][] = []
-  function go(start: number, pick: T[]) {
-    if (pick.length === k) { res.push(pick.slice()); return }
-    for (let i=start; i<arr.length; i++) go(i+1, pick.concat(arr[i]))
-  }
-  go(0, [])
-  return res
-}
-
-function isConsecutiveArray(vals: number[]) {
-  for (let i=1;i<vals.length;i++) if (vals[i] - vals[i-1] !== 1) return false
-  return true
-}
-
-/** Strict 4-card “outside straight” (open-ended). A high only here; no A-2-3-4. */
-function isStrictConsecutive(vals: number[]) {
-  return isConsecutiveArray(vals)
 }
 
