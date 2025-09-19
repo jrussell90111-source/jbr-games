@@ -1,20 +1,6 @@
 // src/BankPanel.tsx
 import React, { useEffect, useState, useMemo } from 'react'
 
-/**
- * BankPanel shows:
- * - Bank totals (separate from in-machine credits), net P/L
- * - Rewards points
- * - Per-game Accuracy reset (scoped to the active spec)
- * - Rewards reset with confirmation
- * - Mini-ATM to add money to the BANK (not credits)
- *
- * Props:
- * - specId/gameTitle: used for the accuracy reset label (per game)
- * - rewardsPoints: live view of rewards
- * - onResetAccuracy: clears accuracy for the active game only
- * - onResetRewards: clears global rewards points + remainder (with confirm)
- */
 export default function BankPanel({
   specId,
   gameTitle,
@@ -28,7 +14,7 @@ export default function BankPanel({
   onResetAccuracy: () => void
   onResetRewards: () => void
 }) {
-  // Keys shared with useGame
+  // Keys shared with games
   const BANK_KEY         = 'bank_balance'
   const P_IN_KEY         = 'bank_in_total'
   const P_OUT_KEY        = 'bank_out_total'
@@ -38,6 +24,7 @@ export default function BankPanel({
     const n = Number(localStorage.getItem(k))
     return Number.isFinite(n) ? n : d
   }
+  const fmtMoney = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2))
 
   // Ensure bank exists (seed to $500 once)
   useEffect(() => {
@@ -53,10 +40,10 @@ export default function BankPanel({
   const [pOut, setPOut] = useState<number>(() => readNum(P_OUT_KEY, 0))
   const [rewards, setRewards] = useState<number>(() => readNum(REWARDS_KEY, 0))
 
-  // Mini-ATM amount
+  // Mini-ATM amount (allow cents)
   const [amt, setAmt] = useState<number>(50)
 
-  // Listen for updates emitted by useGame
+  // Listen for updates emitted by games
   useEffect(() => {
     const onBank = () => setBank(readNum(BANK_KEY, 500))
     const onTotals = () => { setPIn(readNum(P_IN_KEY, 0)); setPOut(readNum(P_OUT_KEY, 0)) }
@@ -74,14 +61,13 @@ export default function BankPanel({
 
   const net = useMemo(() => pOut - pIn, [pIn, pOut])
 
-  // Add to BANK (not credits)
+  // Add to BANK (supports cents)
   function addToBank(delta: number) {
-    const add = Math.max(0, Math.floor(delta || 0))
-    if (!add) return
-    const next = bank + add
+    const add = Math.max(0, Number(delta || 0))
+    if (!Number.isFinite(add) || add <= 0) return
+    const next = +(bank + add).toFixed(2)
     localStorage.setItem(BANK_KEY, String(next))
     setBank(next)
-    // Broadcast so any listeners (including this panel in other tabs) update
     window.dispatchEvent(new Event('app:bank'))
   }
 
@@ -94,19 +80,21 @@ export default function BankPanel({
       <div className="panelBox">
         <div className="row" style={{justifyContent:'space-between'}}>
           <div>Bank balance</div>
-          <b>${bank}</b>
+          <b>${fmtMoney(bank)}</b>
         </div>
         <div className="row" style={{justifyContent:'space-between', opacity:.9}}>
           <div>Money inserted</div>
-          <div>${pIn}</div>
+          <div>${fmtMoney(pIn)}</div>
         </div>
         <div className="row" style={{justifyContent:'space-between', opacity:.9}}>
           <div>Money cashed out</div>
-          <div>${pOut}</div>
+          <div>${fmtMoney(pOut)}</div>
         </div>
         <div className="row" style={{justifyContent:'space-between', marginTop:6}}>
           <div>Net P/L</div>
-          <b style={{color: net >= 0 ? 'var(--good, #7CFC7C)' : 'var(--bad, #FF8C8C)'}}>${net}</b>
+          <b style={{color: net >= 0 ? 'var(--good, #7CFC7C)' : 'var(--bad, #FF8C8C)'}}>
+            ${fmtMoney(net)}
+          </b>
         </div>
 
         <hr style={{opacity:.15, margin:'10px 0'}} />
@@ -129,25 +117,23 @@ export default function BankPanel({
             <input
               id="bankAdd"
               type="number"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              min={1}
-              step={1}
+              inputMode="decimal"
+              step="0.01"
+              min={0.01}
               value={amt}
-              onChange={(e)=>setAmt(Math.max(1, Math.floor(Number(e.target.value)||0)))}
-              style={{width:110, padding:'8px 10px', borderRadius:8, border:'1px solid rgba(255,255,255,.15)', background:'rgba(255,255,255,.06)', color:'white'}}
+              onChange={(e)=>setAmt(Math.max(0.01, Number(e.target.value)||0))}
+              style={{width:140, padding:'8px 10px', borderRadius:8, border:'1px solid rgba(255,255,255,.15)', background:'rgba(255,255,255,.06)', color:'white'}}
             />
             <button type="button" onClick={()=>addToBank(amt)}>Add</button>
           </div>
           <small style={{opacity:.7, display:'block', marginTop:6}}>
-            The bank is your outside wallet. Use “Insert $1 / +$5 / +$10” at the table to move money into credits.
+            The bank is your outside wallet. Use “Insert $10 / $50 / $100” at the table to move money into credits.
           </small>
         </div>
 
         <hr style={{opacity:.15, margin:'10px 0'}} />
 
         <div className="controls" style={{gap:8, flexWrap:'wrap'}}>
-          {/* Per-game accuracy reset */}
           <button
             type="button"
             onClick={() => onResetAccuracy()}
@@ -156,7 +142,6 @@ export default function BankPanel({
             Reset Accuracy ({gameTitle})
           </button>
 
-          {/* Rewards reset with confirmation */}
           <button
             type="button"
             onClick={() => setConfirmRewardsOpen(true)}

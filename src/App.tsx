@@ -4,8 +4,13 @@ import BankPanel from './BankPanel'
 import { audio, installIOSAudioUnlockOnce, installVisibilityResumer } from './audio'
 import { JOB_SPEC_8_5 } from './games/job'
 import { DW_SPEC_25_16_13 } from './games/deuces'
+import { DDB_SPEC_9_6 } from './games/ddb'
 import type { GameSpec } from './games/spec'
 import './styles.css'
+
+// Blackjack
+import BlackjackScreen from './BlackjackScreen'
+import { BJ10_RULES, BJ15_RULES, BJ25_RULES } from './games/blackjack'
 
 /* ------------------------------------------------------------------ */
 /*                     TWO-STAGE LOADER: CONFIG                       */
@@ -206,10 +211,23 @@ function PaytableAny({
 /* ------------------------------------------------------------------ */
 
 export default function App(){
-  // Screens: menu + 2 games
-  const [screen, setScreen] = useState<'menu' | 'job' | 'dw'>('job')
-  const spec: GameSpec = screen === 'dw' ? DW_SPEC_25_16_13 : JOB_SPEC_8_5
+  // Screens: menu + poker games + blackjack tables
+  const [screen, setScreen] = useState<'menu' | 'job' | 'dw' | 'ddb' | 'bj10' | 'bj15' | 'bj25'>('job')
 
+  // Poker specs
+  const isPoker = (screen === 'job' || screen === 'dw' || screen === 'ddb')
+  const spec: GameSpec =
+    screen === 'dw'  ? DW_SPEC_25_16_13 :
+    screen === 'ddb' ? DDB_SPEC_9_6    :
+    JOB_SPEC_8_5
+
+  // Blackjack rules for the three tables
+  const bjRules =
+    screen === 'bj10' ? BJ10_RULES :
+    screen === 'bj15' ? BJ15_RULES :
+    screen === 'bj25' ? BJ25_RULES : null
+
+  // Poker game hook
   const g = useGame(spec)
 
   /* ========= Audio toggle + iOS unlock ========= */
@@ -279,18 +297,18 @@ export default function App(){
   }, [])
 
   /* ========= Preload current hand SVGs (snappy next paints) ========= */
-  const onGameScreen = screen === 'job' || screen === 'dw'
+  const onPokerScreen = isPoker
   useEffect(() => {
-    if (!onGameScreen) return
+    if (!onPokerScreen) return
     if (!g.hand?.length) return
     const imgs = g.hand.map(c => {
       const img = new Image()
       img.decoding = 'async'
-      img.src = `/cards/${mapCardToFile(c.rank, c.suit)}`
+      img.src = `/cards/${mapCardToFile(c.rank as unknown as string, c.suit as unknown as string)}`
       return img
     })
     return () => { imgs.forEach(img => { (img as any).src = '' }) }
-  }, [onGameScreen, g.hand])
+  }, [onPokerScreen, g.hand])
 
   /* ========= Bet One (cycles 1→5, wraps) + pulse ========= */
   const [wrapPulse, setWrapPulse] = useState(false)
@@ -302,7 +320,7 @@ export default function App(){
     })
   }, [])
 
-  const canAdjustBet = onGameScreen && (g.phase === 'bet' || g.phase === 'show') && !g.isAnimating
+  const canAdjustBet = onPokerScreen && (g.phase === 'bet' || g.phase === 'show') && !g.isAnimating
   const betOne = useCallback(() => {
     if (!canAdjustBet) return
     if (g.bet < 5) {
@@ -318,7 +336,7 @@ export default function App(){
   /* ========= Win arps when a new result appears ========= */
   const lastWinRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!onGameScreen) return
+    if (!onPokerScreen) return
     if (!g.result) { lastWinRef.current = null; return }
     const key = `${g.result.rank}|${g.result.payout}`
     if (key === lastWinRef.current) return
@@ -331,17 +349,17 @@ export default function App(){
       r === 'Straight' || r === 'Flush' || r === 'Full House' ? 'big' :
       r.includes('Four of a Kind') || r.includes('Straight Flush') || r.includes('Royal') ? 'royal' : 'small'
     audio.win(tier)
-  }, [onGameScreen, g.result])
+  }, [onPokerScreen, g.result])
 
   /* ========= Actions ========= */
-  const onDeal = useCallback(() => { if (!onGameScreen) return; g.deal() }, [onGameScreen, g.deal])
-  const onDraw = useCallback(() => { if (!onGameScreen) return; g.draw() }, [onGameScreen, g.draw])
-  const onMaxBet = useCallback(() => { if (canAdjustBet) audio.clickHi(); if (onGameScreen) g.setMaxBet() }, [onGameScreen, g.setMaxBet, canAdjustBet])
+  const onDeal = useCallback(() => { if (!onPokerScreen) return; g.deal() }, [onPokerScreen, g.deal])
+  const onDraw = useCallback(() => { if (!onPokerScreen) return; g.draw() }, [onPokerScreen, g.draw])
+  const onMaxBet = useCallback(() => { if (canAdjustBet) audio.clickHi(); if (onPokerScreen) g.setMaxBet() }, [onPokerScreen, g.setMaxBet, canAdjustBet])
 
-  /* ========= Keyboard shortcuts ========= */
+  /* ========= Keyboard shortcuts (poker only) ========= */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!onGameScreen) return
+      if (!onPokerScreen) return
       if (e.repeat) return
       if (g.isAnimating) return
       const k = e.key.toLowerCase()
@@ -361,34 +379,21 @@ export default function App(){
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onGameScreen, g.hand, g.canDeal, g.canDraw, canAdjustBet, betOne, onDeal, onDraw, onMaxBet, g])
+  }, [onPokerScreen, g.hand, g.canDeal, g.canDraw, canAdjustBet, betOne, onDeal, onDraw, onMaxBet, g])
 
   const paytableHighlight = useMemo<string | null>(() => {
-    if (!onGameScreen) return null
+    if (!onPokerScreen) return null
     return (g.result?.rank as any) || (g.initialRank as any) || null
-  }, [onGameScreen, g.result?.rank, g.initialRank])
+  }, [onPokerScreen, g.result?.rank, g.initialRank])
 
-  /* ========= Prevent switching games mid-hand ========= */
-  const canLeaveTable = !g.isAnimating && (g.phase === 'bet' || g.phase === 'show' || g.hand.length === 0)
+  /* ========= Prevent switching games mid-hand (poker) ========= */
+  const canLeaveTable = onPokerScreen
+    ? (!g.isAnimating && (g.phase === 'bet' || g.phase === 'show' || g.hand.length === 0))
+    : true
 
-  /* ========= Settings (gear) ========= */
+  /* ========= Settings (gear) for poker timing ========= */
   const [settingsOpen, setSettingsOpen] = useState(false)
-  type SpeedPreset = 'fast' | 'medium' | 'slow' | 'custom'
-  const PRESETS: Record<Exclude<SpeedPreset, 'custom'>, number> = { fast:120, medium:240, slow:360 }
-  const currentPreset: SpeedPreset = useMemo(() => {
-    const { fast, medium, slow } = PRESETS
-    if (g.dealIntervalMs === fast && g.drawIntervalMs === fast) return 'fast'
-    if (g.dealIntervalMs === medium && g.drawIntervalMs === medium) return 'medium'
-    if (g.dealIntervalMs === slow && g.drawIntervalMs === slow) return 'slow'
-    return 'custom'
-  }, [g.dealIntervalMs, g.drawIntervalMs])
-  const [preset, setPreset] = useState<SpeedPreset>(currentPreset)
-  useEffect(() => { setPreset(currentPreset) }, [currentPreset])
-  const setSpeedPreset = (p: Exclude<SpeedPreset, 'custom'>) => {
-    setPreset(p); const ms = PRESETS[p]; g.setDealIntervalMs(ms); g.setDrawIntervalMs(ms)
-  }
 
-  /* ========= Render ========= */
   return (
     <div className="app">
       {/* ===== TWO-STAGE STARTUP LOADER ===== */}
@@ -447,16 +452,19 @@ export default function App(){
 
       {/* Header with Games / Sound / Settings */}
       <div style={{display:'flex', width:'100%', maxWidth:900, alignItems:'center', justifyContent:'space-between', opacity: blockingLoading ? 0.3 : 1, pointerEvents: blockingLoading ? 'none' : 'auto'}}>
-        <h2 className="title" style={{margin:0}}>Video Poker</h2>
+        <h2 className="title" style={{margin:0}}>Video Poker & Blackjack</h2>
         <div style={{display:'flex', gap:8}}>
-          <button
-            type="button"
-            onClick={() => { if (canLeaveTable) setScreen('menu'); else audio.thud() }}
-            disabled={!canLeaveTable}
-            title={canLeaveTable ? 'Choose a game' : 'Finish the hand before switching games'}
-          >
-            Games
-          </button>
+          {/* Hide the global "Games" button on blackjack screens (use in-screen Back button). */}
+          {isPoker && (
+            <button
+              type="button"
+              onClick={() => { if (canLeaveTable) setScreen('menu'); else audio.thud() }}
+              disabled={!canLeaveTable}
+              title={canLeaveTable ? 'Choose a game' : 'Finish the hand before switching games'}
+            >
+              Games
+            </button>
+          )}
           <button
             type="button"
             aria-pressed={soundOn}
@@ -465,7 +473,8 @@ export default function App(){
           >
             {soundOn ? 'Sound: On' : 'Sound: Off'}
           </button>
-          <button type="button" onClick={() => setSettingsOpen(true)} title="Settings">⚙️ Settings</button>
+          {/* Poker-only settings (card speed). Blackjack has its own trainer toggle inside. */}
+          {isPoker && <button type="button" onClick={() => setSettingsOpen(true)} title="Settings">⚙️ Settings</button>}
         </div>
       </div>
 
@@ -494,6 +503,42 @@ export default function App(){
               <div className="gameTileTitle">Deuces Wild</div>
               <div className="gameTileSub">96.77% · 25/16/13</div>
             </button>
+
+            {/* Double Double Bonus */}
+            <button
+              type="button"
+              className="gameTile"
+              onClick={() => { audio.clickHi(); setScreen('ddb') }}
+            >
+              <div className="gameTileTitle">Double Double Bonus</div>
+              <div className="gameTileSub">9/6 full-pay</div>
+            </button>
+
+            {/* Blackjack tables */}
+            <button
+              type="button"
+              className="gameTile"
+              onClick={() => { audio.clickHi(); setScreen('bj10') }}
+            >
+              <div className="gameTileTitle">Blackjack $10</div>
+              <div className="gameTileSub">8 decks · 6:5 · H17</div>
+            </button>
+            <button
+              type="button"
+              className="gameTile"
+              onClick={() => { audio.clickHi(); setScreen('bj15') }}
+            >
+              <div className="gameTileTitle">Blackjack $15</div>
+              <div className="gameTileSub">8 decks · 3:2 · H17</div>
+            </button>
+            <button
+              type="button"
+              className="gameTile"
+              onClick={() => { audio.clickHi(); setScreen('bj25') }}
+            >
+              <div className="gameTileTitle">Blackjack $25</div>
+              <div className="gameTileSub">1 deck · 3:2 · H17</div>
+            </button>
           </div>
 
           <div className="controls" style={{marginTop:14}}>
@@ -502,8 +547,8 @@ export default function App(){
         </div>
       )}
 
-      {/* ========== GAME SCREEN (JoB or DW) ========== */}
-      {onGameScreen && (
+      {/* ========== POKER GAME SCREEN (JoB / DW / DDB) ========== */}
+      {onPokerScreen && (
         <>
           <div className="layout" style={{opacity: blockingLoading ? 0.3 : 1, pointerEvents: blockingLoading ? 'none' : 'auto'}}>
             {/* Game column */}
@@ -598,7 +643,7 @@ export default function App(){
             </div>
 
             {/* Side panel */}
-	    <BankPanel
+            <BankPanel
               specId={spec.id}
               gameTitle={spec.title}
               rewardsPoints={g.rewardsPoints}
@@ -642,7 +687,15 @@ export default function App(){
         </>
       )}
 
-      {/* ========= SETTINGS MODAL ========= */}
+      {/* ========== BLACKJACK SCREENS ========== */}
+      {(screen === 'bj10' || screen === 'bj15' || screen === 'bj25') && (
+        <BlackjackScreen
+          rules={screen==='bj10' ? BJ10_RULES : screen==='bj15' ? BJ15_RULES : BJ25_RULES}
+          onBack={() => setScreen('menu')}
+        />
+      )}
+
+      {/* ========= SETTINGS MODAL (Poker only) ========= */}
       {settingsOpen && (
         <div className="modal" role="dialog" aria-modal="true" aria-label="Settings" style={{ zIndex: 80 }}>
           <div className="modalBox">
@@ -651,16 +704,7 @@ export default function App(){
               <button onClick={() => setSettingsOpen(false)}>Close</button>
             </div>
 
-            {/* Hints */}
-            <div style={{marginTop:12, padding:'8px 10px', borderRadius:8, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.08)'}}>
-              <label style={{display:'flex', alignItems:'center', gap:8}}>
-                <input type="checkbox" checked={g.hintsEnabled} onChange={e => g.setHintsEnabled(e.target.checked)} />
-                <span>Hints (trainer) enabled for this game</span>
-              </label>
-              <div style={{opacity:.75, fontSize:12, marginTop:6}}>Accuracy is still tracked even if hints are off.</div>
-            </div>
-
-            {/* Speed presets */}
+            {/* Card speed presets (useGame-controlled) */}
             <div style={{marginTop:12, padding:'8px 10px', borderRadius:8, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.08)'}}>
               <div style={{marginBottom:6}}><b>Card speed</b> (ms between cards)</div>
               <div className="row" style={{gap:12, flexWrap:'wrap'}}>
