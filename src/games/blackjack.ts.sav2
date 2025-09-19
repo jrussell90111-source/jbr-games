@@ -1,0 +1,244 @@
+// src/games/blackjack.ts
+import type { Card, Rank } from '../cards'
+
+/** ---------- Rules / Tables ---------- */
+export type BjPayout = '3:2' | '6:5'
+export interface BlackjackRules {
+  id: 'BJ10' | 'BJ15' | 'BJ25'
+  title: string
+  decks: number
+  minBet: number
+  maxBet: number
+  blackjackPayout: BjPayout // 3:2 or 6:5
+  dealerHitsSoft17: true     // per your request: H17 on all
+  doubleAfterSplitAllowed: true
+  allowDoubleOn: 'any-two'   // keep simple — any two card double
+  allowSurrender: false      // not used
+  // Splits
+  allowResplitAces: false
+  maxSplits: number          // e.g., 3 hands total; we’ll allow 3 non-ace splits
+}
+
+/** Your three tables */
+export const BJ10_RULES: BlackjackRules = {
+  id: 'BJ10',
+  title: '$10 Blackjack — 8 decks, 6:5, H17',
+  decks: 8,
+  minBet: 10,
+  maxBet: 100,
+  blackjackPayout: '6:5',
+  dealerHitsSoft17: true,
+  doubleAfterSplitAllowed: true,
+  allowDoubleOn: 'any-two',
+  allowSurrender: false,
+  allowResplitAces: false,
+  maxSplits: 3,
+}
+
+export const BJ15_RULES: BlackjackRules = {
+  id: 'BJ15',
+  title: '$15 Blackjack — 8 decks, 3:2, H17',
+  decks: 8,
+  minBet: 15,
+  maxBet: 500,
+  blackjackPayout: '3:2',
+  dealerHitsSoft17: true,
+  doubleAfterSplitAllowed: true,
+  allowDoubleOn: 'any-two',
+  allowSurrender: false,
+  allowResplitAces: false,
+  maxSplits: 3,
+}
+
+export const BJ25_RULES: BlackjackRules = {
+  id: 'BJ25',
+  title: '$25 Blackjack — Single Deck, 3:2, H17',
+  decks: 1,
+  minBet: 25,
+  maxBet: 1000,
+  blackjackPayout: '3:2',
+  dealerHitsSoft17: true,
+  doubleAfterSplitAllowed: true,
+  allowDoubleOn: 'any-two',
+  allowSurrender: false,
+  allowResplitAces: false,
+  maxSplits: 3,
+}
+
+/** ---------- Hand math ---------- */
+export type BjAction = 'HIT' | 'STAND' | 'DOUBLE' | 'SPLIT'
+export interface BjHand {
+  cards: Card[]
+  bet: number
+  stood: boolean
+  busted: boolean
+  isSplitAces: boolean     // special rule: one card only, then forced stand
+  isFinished: boolean      // done (stood, bust, or natural resolved)
+  wasDoubled: boolean
+  isBlackjackNatural: boolean // 2-card 21 (not after split)
+}
+
+export interface BjRoundState {
+  rules: BlackjackRules
+  shoe: Card[]
+  discard: Card[]
+  dealer: { cards: Card[]; holeRevealed: boolean }
+  hands: BjHand[]         // player hands (current at index `activeIndex`)
+  activeIndex: number     // which hand is acting
+  phase: 'bet' | 'deal' | 'player' | 'dealer' | 'settle' | 'show'
+}
+
+export function cardValue(r: Rank): number {
+  if (r === 'A') return 11
+  if (r === 'K' || r === 'Q' || r === 'J' || r === '10') return 10
+  return Number(r)
+}
+export function valueOfHand(cards: Card[]) {
+  let total = 0
+  let aces = 0
+  for (const c of cards) {
+    if (c.rank === 'A') { total += 11; aces++ }
+    else total += cardValue(c.rank)
+  }
+  while (total > 21 && aces > 0) { total -= 10; aces-- }
+  const soft = aces > 0 && total <= 21
+  const natural = cards.length === 2 && total === 21
+  return { total, soft, natural }
+}
+export function isPair(cards: Card[]) {
+  return cards.length === 2 && cards[0].rank === cards[1].rank
+}
+export function upcardValue(card: Card) {
+  return cardValue(card.rank)
+}
+
+/** ---------- Payout helpers ---------- */
+export function blackjackMultiplier(p: BjPayout) { return p === '3:2' ? 1.5 : 1.2 }
+
+/** ---------- Basic Strategy (H17, DAS). Data-driven ---------- */
+/** We provide two tables:
+ *  - MULTI_H17_DAS: used for 8-deck (BJ10, BJ15)
+ *  - SINGLE_H17_DAS: used for 1-deck (BJ25)
+ *
+ * Format:
+ *  - pairs[rank][dealerUpVal] => 'HIT'|'STAND'|'DOUBLE'|'SPLIT'
+ *  - soft[total][dealerUpVal] => action (total is 13..21 where 13= A+2 …)
+ *  - hard[total][dealerUpVal] => action (5..17..21)
+ *
+ * Notes:
+ *  - We assume no late surrender.
+ *  - DOUBLE means “Double if allowed, otherwise HIT”.
+ *  - SPLIT can be disallowed for Aces once split; that’s enforced in engine.
+ *  - This is a solid baseline; you can tweak edge cases later if desired.
+ */
+
+// Dealer upcard keys we’ll normalize to: 2..11 (where 11 = Ace)
+type Up = 2|3|4|5|6|7|8|9|10|11
+const UPS: Up[] = [2,3,4,5,6,7,8,9,10,11]
+
+// Build helper for quick fill
+function fill<T>(keys: number[], val: T): Record<number, T> {
+  const o: Record<number, T> = {} as any
+  for (const k of keys) o[k] = val
+  return o
+}
+
+/** MULTI-DECK, H17, DAS — baseline table */
+const MULTI_H17_DAS = {
+  pairs: {
+    A: fill(UPS, 'SPLIT' as BjAction),
+    K: fill(UPS, 'STAND' as BjAction),
+    Q: fill(UPS, 'STAND' as BjAction),
+    J: fill(UPS, 'STAND' as BjAction),
+    '10': fill(UPS, 'STAND' as BjAction),
+    '9': {2:'SPLIT',3:'SPLIT',4:'SPLIT',5:'SPLIT',6:'SPLIT',7:'STAND',8:'SPLIT',9:'SPLIT',10:'STAND',11:'STAND'} as Record<Up,BjAction>,
+    '8': fill(UPS, 'SPLIT' as BjAction),
+    '7': {2:'SPLIT',3:'SPLIT',4:'SPLIT',5:'SPLIT',6:'SPLIT',7:'SPLIT',8:'HIT',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+    '6': {2:'SPLIT',3:'SPLIT',4:'SPLIT',5:'SPLIT',6:'SPLIT',7:'HIT',8:'HIT',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+    '5': fill(UPS, 'DOUBLE' as BjAction), // treat as 10
+    '4': {2:'HIT',3:'HIT',4:'HIT',5:'SPLIT',6:'SPLIT',7:'HIT',8:'HIT',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+    '3': {2:'SPLIT',3:'SPLIT',4:'SPLIT',5:'SPLIT',6:'SPLIT',7:'SPLIT',8:'HIT',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+    '2': {2:'SPLIT',3:'SPLIT',4:'SPLIT',5:'SPLIT',6:'SPLIT',7:'SPLIT',8:'HIT',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+  } as Record<Rank, Record<Up, BjAction>>,
+
+  soft: {
+    21: fill(UPS, 'STAND' as BjAction),
+    20: fill(UPS, 'STAND' as BjAction),
+    19: {2:'STAND',3:'STAND',4:'STAND',5:'DOUBLE',6:'DOUBLE',7:'STAND',8:'STAND',9:'STAND',10:'STAND',11:'STAND'} as Record<Up,BjAction>, // A,8
+    18: {2:'DOUBLE',3:'DOUBLE',4:'DOUBLE',5:'DOUBLE',6:'DOUBLE',7:'STAND',8:'STAND',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>, // A,7
+    17: {2:'HIT',3:'DOUBLE',4:'DOUBLE',5:'DOUBLE',6:'DOUBLE',7:'HIT',8:'HIT',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+    16: {2:'HIT',3:'HIT',4:'DOUBLE',5:'DOUBLE',6:'DOUBLE',7:'HIT',8:'HIT',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+    15: {2:'HIT',3:'HIT',4:'DOUBLE',5:'DOUBLE',6:'DOUBLE',7:'HIT',8:'HIT',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+    14: {2:'HIT',3:'HIT',4:'HIT',5:'DOUBLE',6:'DOUBLE',7:'HIT',8:'HIT',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+    13: fill(UPS, 'HIT' as BjAction), // A,2 (double vs 5/6 already above if wanted—kept simple)
+  } as Record<number, Record<Up, BjAction>>,
+
+  hard: {
+    21: fill(UPS, 'STAND' as BjAction),
+    20: fill(UPS, 'STAND' as BjAction),
+    19: fill(UPS, 'STAND' as BjAction),
+    18: fill(UPS, 'STAND' as BjAction),
+    17: fill(UPS, 'STAND' as BjAction),
+    16: {2:'STAND',3:'STAND',4:'STAND',5:'STAND',6:'STAND',7:'HIT',8:'HIT',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+    15: {2:'STAND',3:'STAND',4:'STAND',5:'STAND',6:'STAND',7:'HIT',8:'HIT',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+    14: {2:'STAND',3:'STAND',4:'STAND',5:'STAND',6:'STAND',7:'HIT',8:'HIT',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+    13: {2:'STAND',3:'STAND',4:'STAND',5:'STAND',6:'STAND',7:'HIT',8:'HIT',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+    12: {2:'HIT',3:'HIT',4:'STAND',5:'STAND',6:'STAND',7:'HIT',8:'HIT',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+    11: fill(UPS, 'DOUBLE' as BjAction),
+    10: {2:'DOUBLE',3:'DOUBLE',4:'DOUBLE',5:'DOUBLE',6:'DOUBLE',7:'DOUBLE',8:'DOUBLE',9:'DOUBLE',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+    9:  {2:'HIT',3:'DOUBLE',4:'DOUBLE',5:'DOUBLE',6:'DOUBLE',7:'HIT',8:'HIT',9:'HIT',10:'HIT',11:'HIT'} as Record<Up,BjAction>,
+    8:  fill(UPS, 'HIT' as BjAction),
+    7:  fill(UPS, 'HIT' as BjAction),
+    6:  fill(UPS, 'HIT' as BjAction),
+    5:  fill(UPS, 'HIT' as BjAction),
+  } as Record<number, Record<Up, BjAction>>,
+}
+
+/** SINGLE-DECK H17 DAS — start with same baseline; you can tweak later */
+const SINGLE_H17_DAS = MULTI_H17_DAS
+
+function upToKey(card: Card): Up {
+  const v = upcardValue(card)
+  return (v === 11 ? 11 : (v === 10 ? 10 : (v as Up)))
+}
+
+function pickTable(rules: BlackjackRules) {
+  return rules.decks === 1 ? SINGLE_H17_DAS : MULTI_H17_DAS
+}
+
+/** Trainer: returns recommended action for a two-card starting hand (or post-split two-card hand). */
+export function basicStrategyAction(
+  player: Card[],
+  dealerUp: Card,
+  rules: BlackjackRules,
+  canDouble: boolean,
+  canSplit: boolean,
+  isSplitAces: boolean
+): BjAction {
+  const table = pickTable(rules)
+  const up = upToKey(dealerUp)
+
+  // If split aces: one card only → auto STAND after receive (engine enforces). Trainer echoes STAND.
+  if (isSplitAces) return 'STAND'
+
+  // Pairs first
+  if (isPair(player) && canSplit) {
+    const r = player[0].rank
+    const entry = table.pairs[r]
+    if (entry) return entry[up]
+  }
+
+  const v = valueOfHand(player)
+  if (v.soft) {
+    const ent = table.soft[v.total] ?? table.soft[Math.min(Math.max(v.total, 13), 21)]
+    let act = ent[up]
+    if (act === 'DOUBLE' && !canDouble) act = 'HIT'
+    return act
+  } else {
+    const ent = table.hard[v.total] ?? table.hard[Math.min(Math.max(v.total, 5), 21)]
+    let act = ent[up]
+    if (act === 'DOUBLE' && !canDouble) act = 'HIT'
+    return act
+  }
+}
+

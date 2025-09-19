@@ -15,18 +15,10 @@ const DW_PAYTABLE: Paytable = {
   'Flush':              [2,4,6,8,10],
   'Straight':           [2,4,6,8,10],
   'Three of a Kind':    [1,2,3,4,5],
-
-  // JoB-only rows (DW never returns these)
+  // JoB-only rows kept for type completeness (zeroed)
   'Royal Flush':        [0,0,0,0,0],
   'Two Pair':           [0,0,0,0,0],
   'Jacks or Better':    [0,0,0,0,0],
-
-  // DDB-specific quad categories (DW never returns these)
-  'Four Aces w/2,3,4':       [0,0,0,0,0],
-  'Four 2s,3s,4s w/A,2,3,4': [0,0,0,0,0],
-  'Four Aces':               [0,0,0,0,0],
-  'Four 2s,3s,4s':           [0,0,0,0,0],
-  'Four 5s thru Ks':         [0,0,0,0,0],
 }
 
 const DW_ORDER: HandName[] = [
