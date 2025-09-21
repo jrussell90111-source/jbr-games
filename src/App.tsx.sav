@@ -12,30 +12,29 @@ import './styles.css'
 import BlackjackScreen from './BlackjackScreen'
 import { BJ10_RULES, BJ15_RULES, BJ25_RULES } from './games/blackjack'
 
+//RouletteScreen
+import RouletteScreen from './RouletteScreen'
+
 /* ------------------------------------------------------------------ */
 /*                     TWO-STAGE LOADER: CONFIG                       */
 /* ------------------------------------------------------------------ */
 
 // Cache-bust token for card assets (bump if CDN caches a bad path)
-const ASSET_VER = 'cards-v3'
-
-// Respect Vite/Pages base URL for all public assets
-const BASE = (import.meta as any).env?.BASE_URL ?? '/'
-const asset = (p: string) => `${BASE}${p.replace(/^\//, '')}`
+const ASSET_VER = 'cards-v1'
 
 // Audio assets to warm (non-blocking stage)
 const AUDIO_URLS = [
-  asset('audio/click.mp3'),
-  asset('audio/click-hi.mp3'),
-  asset('audio/thud.mp3'),
-  asset('audio/deal-burst.mp3'),
-  asset('audio/draw.mp3'),
-  asset('audio/hold-on.mp3'),
-  asset('audio/hold-off.mp3'),
-  asset('audio/win-small.mp3'),
-  asset('audio/win-med.mp3'),
-  asset('audio/win-big.mp3'),
-  asset('audio/win-royal.mp3'),
+  '/audio/click.mp3',
+  '/audio/click-hi.mp3',
+  '/audio/thud.mp3',
+  '/audio/deal-burst.mp3',
+  '/audio/draw.mp3',
+  '/audio/hold-on.mp3',
+  '/audio/hold-off.mp3',
+  '/audio/win-small.mp3',
+  '/audio/win-med.mp3',
+  '/audio/win-big.mp3',
+  '/audio/win-royal.mp3',
 ]
 
 /* ------------------------------------------------------------------ */
@@ -64,7 +63,7 @@ function buildAllCardUrls(): string[] {
   const faces: string[] = []
   for (const s of SUITS) for (const r of RANKS) faces.push(`/cards/${mapCardToFile(r, s)}`)
   faces.push('/cards/back.svg') // include the back
-  return faces.map(u => `${asset(u)}?v=${ASSET_VER}`)
+  return faces.map(u => `${u}?v=${ASSET_VER}`)
 }
 
 // Promise-based image warmup with per-image progress + timeout
@@ -163,7 +162,7 @@ const CardFace = React.memo(function CardFace({ rank, suit, held, onClick }: Car
       style={{ position:'relative', borderRadius:8, overflow:'hidden', boxShadow:'2px 4px 8px rgba(0,0,0,0.25)', contain:'content' }}
     >
       <img
-        src={asset(`cards/${fileName}`)}
+        src={`/cards/${fileName}`}
         alt={alt}
         style={{ width:'100%', height:'100%', objectFit:'contain', display:'block' }}
         width={240} height={360}
@@ -215,11 +214,13 @@ function PaytableAny({
 /* ------------------------------------------------------------------ */
 
 export default function App(){
-  // Screens: menu + poker games + blackjack tables
-  const [screen, setScreen] = useState<'menu' | 'job' | 'dw' | 'ddb' | 'bj10' | 'bj15' | 'bj25'>('job')
+  // Screens: menu + poker games + blackjack tables + roulette
+  const [screen, setScreen] = useState<'menu' | 'job' | 'dw' | 'ddb' | 'bj10' | 'bj15' | 'bj25' | 'roulette'>('job')
 
   // Poker specs
   const isPoker = (screen === 'job' || screen === 'dw' || screen === 'ddb')
+  const isRoulette = (screen === 'roulette')
+ 
   const spec: GameSpec =
     screen === 'dw'  ? DW_SPEC_25_16_13 :
     screen === 'ddb' ? DDB_SPEC_9_6    :
@@ -252,15 +253,11 @@ export default function App(){
     let cancelled = false
     const urls = buildAllCardUrls()
     ;(async () => {
-      // Give Pages/Access more time: 15s per image
       await preloadImagesWithProgress(urls, (url, ok) => {
         if (cancelled) return
         setCardDone(d => d + 1)
-        if (!ok) {
-          try { console.error('[Card preload] FAILED:', url) } catch {}
-          setCardFailures(f => f.concat(url))
-        }
-      }, 15000)
+        if (!ok) setCardFailures(f => f.concat(url))
+      })
       if (!cancelled) setCardsFinished(true)
     })()
     return () => { cancelled = true }
@@ -287,12 +284,9 @@ export default function App(){
 
   // Gate: block interaction until user starts OR audio completes after cards
   const [startupDone, setStartupDone] = useState(false)
-  // Auto-dismiss only if everything is warmed and there were NO card failures
   useEffect(() => {
-    if (!startupDone && cardsFinished && audioDone >= audioTotal && cardFailures.length === 0) {
-      setStartupDone(true)
-    }
-  }, [cardsFinished, audioDone, audioTotal, startupDone, cardFailures.length])
+    if (!startupDone && cardsFinished && audioDone >= audioTotal) setStartupDone(true)
+  }, [cardsFinished, audioDone, audioTotal, startupDone])
 
   const onStartNow = () => {
     if (cardsFinished) setStartupDone(true)
@@ -315,7 +309,7 @@ export default function App(){
     const imgs = g.hand.map(c => {
       const img = new Image()
       img.decoding = 'async'
-      img.src = asset('cards/' + mapCardToFile(c.rank as unknown as string, c.suit as unknown as string))
+      img.src = `/cards/${mapCardToFile(c.rank as unknown as string, c.suit as unknown as string)}`
       return img
     })
     return () => { imgs.forEach(img => { (img as any).src = '' }) }
@@ -348,23 +342,18 @@ export default function App(){
   const lastWinRef = useRef<string | null>(null)
   useEffect(() => {
     if (!onPokerScreen) return
-    if (g.result) {
-      const key = `${g.result.rank}|${g.result.payout}`
-      if (key !== lastWinRef.current) {
-        lastWinRef.current = key
-        if (g.result.payout > 0) {
-          const r = String(g.result.rank)
-          const tier: 'small'|'med'|'big'|'royal' =
-            r.includes('Jacks or Better') || r === 'Two Pair' ? 'small' :
-            r === 'Three of a Kind' ? 'med' :
-            r === 'Straight' || r === 'Flush' || r === 'Full House' ? 'big' :
-            r.includes('Four of a Kind') || r.includes('Straight Flush') || r.includes('Royal') ? 'royal' : 'small'
-          audio.win(tier)
-        }
-      }
-    } else {
-      lastWinRef.current = null
-    }
+    if (!g.result) { lastWinRef.current = null; return }
+    const key = `${g.result.rank}|${g.result.payout}`
+    if (key === lastWinRef.current) return
+    lastWinRef.current = key
+    if (g.result.payout <= 0) return
+    const r = String(g.result.rank)
+    const tier: 'small'|'med'|'big'|'royal' =
+      r.includes('Jacks or Better') || r === 'Two Pair' ? 'small' :
+      r === 'Three of a Kind' ? 'med' :
+      r === 'Straight' || r === 'Flush' || r === 'Full House' ? 'big' :
+      r.includes('Four of a Kind') || r.includes('Straight Flush') || r.includes('Royal') ? 'royal' : 'small'
+    audio.win(tier)
   }, [onPokerScreen, g.result])
 
   /* ========= Actions ========= */
@@ -443,24 +432,6 @@ export default function App(){
                 <div className="row" style={{marginTop:10, gap:10, fontSize:14}}>
                   <div style={{flex:1}}>Audio: {audioDone}/{audioTotal}{audioFailures.length ? ` (failed ${audioFailures.length})` : ''}</div>
                 </div>
-                {/* Keep card failures visible on this stage too */}
-                {cardFailures.length > 0 && (
-                  <div style={{marginTop:10}}>
-                    <div style={{fontSize:14, marginBottom:6}}>
-                      Cards finished with <b>{cardFailures.length}</b> failures.
-                    </div>
-                    <details open style={{marginTop:4}}>
-                      <summary style={{cursor:'pointer'}}>Show failed card files</summary>
-                      <ul style={{margin:'6px 0 0 18px', maxHeight:160, overflow:'auto'}}>
-                        {cardFailures.map(u => (
-                          <li key={u} style={{opacity:.85}}>
-                            <a href={u} target="_blank" rel="noreferrer">{u}</a>
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  </div>
-                )}
                 <div style={{marginTop:10, fontSize:12, opacity:.75}}>
                   You can start now — audio will finish warming in the background.
                 </div>
@@ -488,8 +459,8 @@ export default function App(){
       <div style={{display:'flex', width:'100%', maxWidth:900, alignItems:'center', justifyContent:'space-between', opacity: blockingLoading ? 0.3 : 1, pointerEvents: blockingLoading ? 'none' : 'auto'}}>
         <h2 className="title" style={{margin:0}}>Video Poker & Blackjack</h2>
         <div style={{display:'flex', gap:8}}>
-          {/* Hide the global "Games" button on blackjack screens (use in-screen Back button). */}
-          {isPoker && (
+          {/* Show the global "Games" on poker and roulette (Blackjack uses its own Back. */}
+          {(isPoker || isRoulette) && (
             <button
               type="button"
               onClick={() => { if (canLeaveTable) setScreen('menu'); else audio.thud() }}
@@ -573,6 +544,16 @@ export default function App(){
               <div className="gameTileTitle">Blackjack $25</div>
               <div className="gameTileSub">1 deck · 3:2 · H17</div>
             </button>
+
+           {/* Roulette */}
+           <button
+             type="button"
+             className="gameTile"
+             onClick={() => { audio.clickHi(); setScreen('roulette') }}
+           >
+             <div className="gameTileTitle">Roulette</div>
+             <div className="gameTileSub">Single-zero · quick demo</div>
+           </button>
           </div>
 
           <div className="controls" style={{marginTop:14}}>
@@ -630,7 +611,7 @@ export default function App(){
                     return (
                       <div key={i} className="card" style={{ borderRadius:8, overflow:'hidden', boxShadow:'2px 4px 8px rgba(0,0,0,0.25)' }}>
                         <img
-                          src={`${asset('cards/back.svg')}?v=${ASSET_VER}`}
+                          src={`/cards/back.svg?v=${ASSET_VER}`}
                           alt="Card back"
                           style={{ width:'100%', height:'100%', objectFit:'contain', display:'block' }}
                           width={240}
@@ -702,7 +683,7 @@ export default function App(){
                     const fileName = mapCardToFile(c.rank as unknown as string, c.suit as unknown as string)
                     return (
                       <div key={c.id} className={`hintCard ${keep ? 'keep' : ''}`} title={`${c.rank} ${c.suit}`}>
-                        <img src={asset(`cards/${fileName}`)} alt={`${c.rank} of ${c.suit}`} />
+                        <img src={`/cards/${fileName}`} alt={`${c.rank} of ${c.suit}`} />
                       </div>
                     )
                   })}
@@ -728,6 +709,11 @@ export default function App(){
           onBack={() => setScreen('menu')}
         />
       )}
+
+       {/* ========== ROULETTE SCREEN ========== */}
+       {screen === 'roulette' && (
+         <RouletteScreen />
+       )}
 
       {/* ========= SETTINGS MODAL (Poker only) ========= */}
       {settingsOpen && (
