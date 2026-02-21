@@ -16,6 +16,7 @@ function sleep(ms: number) { return new Promise<void>(r => setTimeout(r, ms)) }
 class AudioManager {
   private ctx?: AudioContext
   private master?: GainNode
+  private _spinPool?: HTMLAudioElement[]
   enabled = true
   /** Optional console logging for troubleshooting */
   debug = false
@@ -250,7 +251,7 @@ class AudioManager {
 
     if (this.enabled) {
       // Best-effort play; ignore autoplay errors (mobile without gesture, etc.)
-      void el.play().catch(err => {
+      void el.play().catch((err: unknown) => {
         this.debug && console.warn('[audio] rouletteSpinPlay play() failed; simulating timing', err)
       })
     } else {

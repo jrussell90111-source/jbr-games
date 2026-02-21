@@ -4,15 +4,15 @@ import React, { useMemo } from 'react'
 type Phase = 'bet' | 'spin' | 'show'
 type RouletteAPI = {
   phase: Phase
-  bets: any[] // { type, amount, number? } and/or { numbers?: number[] }
+  bets: any[]
   addChip: (type: any, nums?: number | number[]) => void
   removeChip: (type: any, nums?: number | number[]) => void
   addAmount?: (type: any, nums: number | number[] | undefined, delta: number) => void
   removeAmount?: (type: any, nums: number | number[] | undefined, delta: number) => void
 }
 
-const INSIDE_UNIT = 2
-const OUTSIDE_MIN = 10
+const INSIDE_UNIT  = 2
+const OUTSIDE_MIN  = 10
 const OUTSIDE_UNIT = 2
 const LABEL_WITH_DOLLAR = true
 
@@ -22,6 +22,7 @@ function colorOf(n: number): 'red' | 'black' | 'green' {
   return RED_SET.has(n) ? 'red' : 'black'
 }
 
+// ─── bet-amount lookup ────────────────────────────────────────────────────────
 function useAmount(bets: any[]) {
   const map = useMemo(() => {
     const m = new Map<string, number>()
@@ -37,27 +38,28 @@ function useAmount(bets: any[]) {
     return m
   }, [bets])
 
-  const amt = (type: string, nums?: number | number[]) => {
+  return (type: string, nums?: number | number[]) => {
     const arr = typeof nums === 'number' ? [nums] : (nums ?? [])
     const key = `${type}:${arr.slice().sort((a, c) => a - c).join('-')}`
     return map.get(key) ?? 0
   }
-  return amt
 }
 
+// ─── chip display ─────────────────────────────────────────────────────────────
 function ChipAmount({ amount }: { amount: number }) {
   if (amount <= 0) return null
   const rounded = Math.round(amount)
   const label = LABEL_WITH_DOLLAR ? `$${rounded}` : String(rounded)
   return (
     <div className="rb-chips" aria-label={`${label} chip`}>
-      <div className="rb-chip" style={{ display: 'grid', placeItems: 'center', fontWeight: 800 }}>
+      <div className="rb-chip">
         <span className="rb-chip-label">{label}</span>
       </div>
     </div>
   )
 }
 
+// ─── dolly ────────────────────────────────────────────────────────────────────
 function Dolly({ label }: { label: React.ReactNode }) {
   return (
     <div className="rb-dolly" title="Winning number">
@@ -66,6 +68,7 @@ function Dolly({ label }: { label: React.ReactNode }) {
   )
 }
 
+// ─── bet helpers ──────────────────────────────────────────────────────────────
 function isOutsideType(t: string): boolean {
   return (
     t === 'red' || t === 'black' ||
@@ -75,16 +78,16 @@ function isOutsideType(t: string): boolean {
     t === 'column1' || t === 'column2' || t === 'column3'
   )
 }
-function addExact(g: RouletteAPI, type: string, nums: number | number[] | undefined, delta: number, fallbackUnit: number) {
+function addExact(g: RouletteAPI, type: string, nums: number | number[] | undefined, delta: number, unit: number) {
   if (delta <= 0) return
   if (typeof g.addAmount === 'function') { g.addAmount(type, nums, delta); return }
-  const steps = Math.round(delta / fallbackUnit)
+  const steps = Math.round(delta / unit)
   for (let i = 0; i < steps; i++) g.addChip(type, nums)
 }
-function removeExact(g: RouletteAPI, type: string, nums: number | number[] | undefined, delta: number, fallbackUnit: number) {
+function removeExact(g: RouletteAPI, type: string, nums: number | number[] | undefined, delta: number, unit: number) {
   if (delta <= 0) return
   if (typeof g.removeAmount === 'function') { g.removeAmount(type, nums, delta); return }
-  const steps = Math.round(delta / fallbackUnit)
+  const steps = Math.round(delta / unit)
   for (let i = 0; i < steps; i++) g.removeChip(type, nums)
 }
 function addInside(g: RouletteAPI, type: string, nums?: number | number[]) {
@@ -105,319 +108,296 @@ function removeOutside(g: RouletteAPI, amtNow: number, type: string) {
   else removeExact(g, type, undefined, amtNow, OUTSIDE_UNIT)
 }
 
+// ─── number cell ─────────────────────────────────────────────────────────────
 function NumberCell({
-  n, disabled, amount, showDolly, onAdd, onRemove
+  n, disabled, color, amount, showDolly, onAdd, onRemove
 }: {
   n: number
   disabled: boolean
+  color: 'red' | 'black' | 'green'
   amount: number
   showDolly: boolean
   onAdd: () => void
   onRemove: () => void
 }) {
-  const kind = colorOf(n)
   return (
     <div
-      className={`rb-cell num ${disabled ? 'disabled' : ''}`}
+      className={`rb-cell num ${color}${disabled ? ' disabled' : ''}`}
       onClick={(e) => { e.preventDefault(); if (!disabled) onAdd() }}
       onContextMenu={(e) => { e.preventDefault(); if (!disabled) onRemove() }}
       role="button"
-      title="Left-click: +$2, Right-click: -$2"
+      title={`${n} — Left-click: +$${INSIDE_UNIT}, Right-click: -$${INSIDE_UNIT}`}
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' && !disabled) onAdd() }}
     >
-      <div className={`rb-oval ${kind}`}>
-        <span className="rb-oval-num">{n}</span>
-      </div>
+      <span className="rb-num-label">{n}</span>
       <ChipAmount amount={amount} />
       {showDolly && <Dolly label={n} />}
     </div>
   )
 }
 
-const rowStart = (r: number) => (r - 1) * 3 + 1
-const numRowIndex = (r: number) => 2 * r
-
-export default function RouletteBoard({
-  g,
-  winnerNumber = null,
-  spinMs = 0,
+// ─── hit zone shorthand ───────────────────────────────────────────────────────
+function Hit({
+  cls, gc, gr, onClick, onCtx, children
 }: {
-  g: RouletteAPI,
-  winnerNumber?: number | null,
-  spinMs?: number
+  cls: string
+  gc: number | string
+  gr: number | string
+  onClick: () => void
+  onCtx: (e: React.MouseEvent) => void
+  children?: React.ReactNode
 }) {
-  const disabled = g.phase !== 'bet'
-  const amt = useAmount(g.bets)
-
   return (
-    <div className="rb-board">
-      {/* ==== SLIM WHEEL (unchanged) ==== */}
-      <div className="rw-wrap" aria-label="Roulette wheel">
-        <div
-          className={`rw-wheel ${g.phase === 'spin' ? 'is-spinning' : ''}`}
-          style={{ ['--spinMs' as any]: `${Math.max(1, spinMs || 0)}ms` }}
-        >
-          <div className="rw-ring" />
-        </div>
-        <div className="rw-pointer" />
-      </div>
-
-      {/* ======= NEW: SIDE-RAIL LAYOUT WRAPPER ======= */}
-      <div className="rb-layout">
-        {/* CENTER — NUMBERS GRID (unchanged inside logic) */}
-        <div className="rb-grid">
-          {/* Right rail (internal) for streets/lines stays */}
-          <div className="rb-rail" aria-hidden style={{ gridColumn: 4, gridRow: '1 / -1' }} />
-
-          {/* ZERO */}
-          <div className="rb-zero" style={{ gridColumn: '1 / span 3', gridRow: 1 }}>
-            <NumberCell
-              n={0}
-              disabled={disabled}
-              amount={amt('straight', 0)}
-              showDolly={winnerNumber === 0}
-              onAdd={() => addInside(g, 'straight', 0)}
-              onRemove={() => removeInside(g, amt('straight', 0), 'straight', 0)}
-            />
-          </div>
-
-          {/* 0-combos */}
-          <div className="rb-hit trio"
-               style={{ gridRow: '1 / span 2', gridColumn: 1 }}
-               onClick={() => addInside(g, 'trio012', [0, 1, 2])}
-               onContextMenu={(e) => { e.preventDefault(); removeInside(g, amt('trio012', [0,1,2]), 'trio012', [0,1,2]) }}>
-            <ChipAmount amount={amt('trio012', [0,1,2])} />
-          </div>
-          <div className="rb-hit first4"
-               style={{ gridRow: '1 / span 2', gridColumn: 2 }}
-               onClick={() => addInside(g, 'first4', [0, 1, 2, 3])}
-               onContextMenu={(e) => { e.preventDefault(); removeInside(g, amt('first4', [0,1,2,3]), 'first4', [0,1,2,3]) }}>
-            <ChipAmount amount={amt('first4', [0,1,2,3])} />
-          </div>
-          <div className="rb-hit trio"
-               style={{ gridRow: '1 / span 2', gridColumn: 3 }}
-               onClick={() => addInside(g, 'trio023', [0, 2, 3])}
-               onContextMenu={(e) => { e.preventDefault(); removeInside(g, amt('trio023', [0,2,3]), 'trio023', [0,2,3]) }}>
-            <ChipAmount amount={amt('trio023', [0,2,3])} />
-          </div>
-
-          {/* 12 rows of numbers + inside hits */}
-          {Array.from({ length: 12 }, (_, idx) => {
-            const r = idx + 1
-            const row = numRowIndex(r)
-            const a = rowStart(r), b = a + 1, c = a + 2
-            return (
-              <React.Fragment key={r}>
-                <div className="c1" style={{ gridRow: row, gridColumn: 1 }}>
-                  <NumberCell
-                    n={a} disabled={disabled}
-                    amount={amt('straight', a)} showDolly={winnerNumber === a}
-                    onAdd={() => addInside(g, 'straight', a)}
-                    onRemove={() => removeInside(g, amt('straight', a), 'straight', a)}
-                  />
-                </div>
-                <div className="c2" style={{ gridRow: row, gridColumn: 2 }}>
-                  <NumberCell
-                    n={b} disabled={disabled}
-                    amount={amt('straight', b)} showDolly={winnerNumber === b}
-                    onAdd={() => addInside(g, 'straight', b)}
-                    onRemove={() => removeInside(g, amt('straight', b), 'straight', b)}
-                  />
-                </div>
-                <div className="c3" style={{ gridRow: row, gridColumn: 3 }}>
-                  <NumberCell
-                    n={c} disabled={disabled}
-                    amount={amt('straight', c)} showDolly={winnerNumber === c}
-                    onAdd={() => addInside(g, 'straight', c)}
-                    onRemove={() => removeInside(g, amt('straight', c), 'straight', c)}
-                  />
-                </div>
-
-                {/* Horizontal splits */}
-                <div className="rb-hit hsplit"
-                     style={{ gridRow: row, gridColumn: '1 / span 2' }}
-                     onClick={() => addInside(g, 'split', [a, b])}
-                     onContextMenu={(e) => { e.preventDefault(); removeInside(g, amt('split', [a, b]), 'split', [a, b]) }}>
-                  <ChipAmount amount={amt('split', [a, b])} />
-                </div>
-                <div className="rb-hit hsplit"
-                     style={{ gridRow: row, gridColumn: '2 / span 2' }}
-                     onClick={() => addInside(g, 'split', [b, c])}
-                     onContextMenu={(e) => { e.preventDefault(); removeInside(g, amt('split', [b, c]), 'split', [b, c]) }}>
-                  <ChipAmount amount={amt('split', [b, c])} />
-                </div>
-
-                {/* Street at internal rail */}
-                <div className="rb-hit street"
-                     style={{ gridRow: row, gridColumn: 4 }}
-                     onClick={() => addInside(g, 'street', [a, b, c])}
-                     onContextMenu={(e) => { e.preventDefault(); removeInside(g, amt('street', [a, b, c]), 'street', [a, b, c]) }}>
-                  <ChipAmount amount={amt('street', [a, b, c])} />
-                </div>
-
-                {/* With next row */}
-                {r < 12 && (
-                  <>
-                    {/* Vertical splits */}
-                    <div className="rb-hit vsplit"
-                         style={{ gridRow: `${row} / span 2`, gridColumn: 1 }}
-                         onClick={() => addInside(g, 'split', [a, a + 3])}
-                         onContextMenu={(e) => { e.preventDefault(); removeInside(g, amt('split', [a, a + 3]), 'split', [a, a + 3]) }}>
-                      <ChipAmount amount={amt('split', [a, a + 3])} />
-                    </div>
-                    <div className="rb-hit vsplit"
-                         style={{ gridRow: `${row} / span 2`, gridColumn: 2 }}
-                         onClick={() => addInside(g, 'split', [b, b + 3])}
-                         onContextMenu={(e) => { e.preventDefault(); removeInside(g, amt('split', [b, b + 3]), 'split', [b, b + 3]) }}>
-                      <ChipAmount amount={amt('split', [b, b + 3])} />
-                    </div>
-                    <div className="rb-hit vsplit"
-                         style={{ gridRow: `${row} / span 2`, gridColumn: 3 }}
-                         onClick={() => addInside(g, 'split', [c, c + 3])}
-                         onContextMenu={(e) => { e.preventDefault(); removeInside(g, amt('split', [c, c + 3]), 'split', [c, c + 3]) }}>
-                      <ChipAmount amount={amt('split', [c, c + 3])} />
-                    </div>
-
-                    {/* Corners */}
-                    <div className="rb-hit corner"
-                         style={{ gridRow: `${row} / span 2`, gridColumn: '1 / span 2' }}
-                         onClick={() => addInside(g, 'corner', [a, b, a + 3, b + 3])}
-                         onContextMenu={(e) => { e.preventDefault(); removeInside(g, amt('corner', [a, b, a + 3, b + 3]), 'corner', [a, b, a + 3, b + 3]) }}>
-                      <ChipAmount amount={amt('corner', [a, b, a + 3, b + 3])} />
-                    </div>
-                    <div className="rb-hit corner"
-                         style={{ gridRow: `${row} / span 2`, gridColumn: '2 / span 2' }}
-                         onClick={() => addInside(g, 'corner', [b, c, b + 3, c + 3])}
-                         onContextMenu={(e) => { e.preventDefault(); removeInside(g, amt('corner', [b, c, b + 3, c + 3]), 'corner', [b, c, b + 3, c + 3]) }}>
-                      <ChipAmount amount={amt('corner', [b, c, b + 3, c + 3])} />
-                    </div>
-
-                    {/* Line (double street) */}
-                    <div className="rb-hit line"
-                         style={{ gridRow: `${row} / span 2`, gridColumn: 4 }}
-                         onClick={() => addInside(g, 'line', [a, b, c, a + 3, b + 3, c + 3])}
-                         onContextMenu={(e) => { e.preventDefault(); removeInside(g, amt('line', [a, b, c, a + 3, b + 3, c + 3]), 'line', [a, b, c, a + 3, b + 3, c + 3]) }}>
-                      <ChipAmount amount={amt('line', [a, b, c, a + 3, b + 3, c + 3])} />
-                    </div>
-                  </>
-                )}
-              </React.Fragment>
-            )
-          })}
-        </div>
-
-        {/* RIGHT RAIL — Even-money */}
-        <div className="rb-rail-right">
-          <div
-            className="rb-rail-cell"
-            onClick={() => addOutside(g, amt('low'), 'low')}
-            onContextMenu={(e) => { e.preventDefault(); removeOutside(g, amt('low'), 'low') }}
-          >
-            <div className="rb-label">1–18</div>
-            <ChipAmount amount={amt('low')} />
-          </div>
-          <div
-            className="rb-rail-cell"
-            onClick={() => addOutside(g, amt('even'), 'even')}
-            onContextMenu={(e) => { e.preventDefault(); removeOutside(g, amt('even'), 'even') }}
-          >
-            <div className="rb-label">EVEN</div>
-            <ChipAmount amount={amt('even')} />
-          </div>
-          <div
-            className="rb-rail-cell rb-rail-red"
-            onClick={() => addOutside(g, amt('red'), 'red')}
-            onContextMenu={(e) => { e.preventDefault(); removeOutside(g, amt('red'), 'red') }}
-          >
-            <div className="rb-label">RED</div>
-            <ChipAmount amount={amt('red')} />
-          </div>
-          <div
-            className="rb-rail-cell rb-rail-black"
-            onClick={() => addOutside(g, amt('black'), 'black')}
-            onContextMenu={(e) => { e.preventDefault(); removeOutside(g, amt('black'), 'black') }}
-          >
-            <div className="rb-label">BLACK</div>
-            <ChipAmount amount={amt('black')} />
-          </div>
-          <div
-            className="rb-rail-cell"
-            onClick={() => addOutside(g, amt('odd'), 'odd')}
-            onContextMenu={(e) => { e.preventDefault(); removeOutside(g, amt('odd'), 'odd') }}
-          >
-            <div className="rb-label">ODD</div>
-            <ChipAmount amount={amt('odd')} />
-          </div>
-          <div
-            className="rb-rail-cell"
-            onClick={() => addOutside(g, amt('high'), 'high')}
-            onContextMenu={(e) => { e.preventDefault(); removeOutside(g, amt('high'), 'high') }}
-          >
-            <div className="rb-label">19–36</div>
-            <ChipAmount amount={amt('high')} />
-          </div>
-        </div>
-      </div>
-
-      {/* LEFT RAIL — Dozens */}
-      <div className="rb-rail-left">
-        <div className="rb-dozens-stack">
-          <div
-            className="rb-rail-cell rb-dozen rb-dozen-1"
-            onClick={() => addOutside(g, amt('dozen1'), 'dozen1')}
-            onContextMenu={(e) => { e.preventDefault(); removeOutside(g, amt('dozen1'), 'dozen1') }}
-  >
-            <div className="rb-label">1st 12</div>
-            <ChipAmount amount={amt('dozen1')} />
-          </div>
-          <div
-            className="rb-rail-cell rb-dozen rb-dozen-2"
-            onClick={() => addOutside(g, amt('dozen2'), 'dozen2')}
-            onContextMenu={(e) => { e.preventDefault(); removeOutside(g, amt('dozen2'), 'dozen2') }}
-          >
-            <div className="rb-label">2nd 12</div>
-            <ChipAmount amount={amt('dozen2')} />
-          </div>
-          <div
-            className="rb-rail-cell rb-dozen rb-dozen-3"
-            onClick={() => addOutside(g, amt('dozen3'), 'dozen3')}
-            onContextMenu={(e) => { e.preventDefault(); removeOutside(g, amt('dozen3'), 'dozen3') }}
-          >
-            <div className="rb-label">3rd 12</div>
-            <ChipAmount amount={amt('dozen3')} />
-        </div>
-      </div>
-    </div>
-
-      {/* ======= BOTTOM: Columns (2:1) aligned with each number column ======= */}
-      <div className="rb-cols-bottom">
-        <div
-          className="rb-col-cell"
-          onClick={() => addOutside(g, amt('column1'), 'column1')}
-          onContextMenu={(e) => { e.preventDefault(); removeOutside(g, amt('column1'), 'column1') }}
-        >
-          <div className="rb-label">2:1</div>
-          <ChipAmount amount={amt('column1')} />
-        </div>
-        <div
-          className="rb-col-cell"
-          onClick={() => addOutside(g, amt('column2'), 'column2')}
-          onContextMenu={(e) => { e.preventDefault(); removeOutside(g, amt('column2'), 'column2') }}
-        >
-          <div className="rb-label">2:1</div>
-          <ChipAmount amount={amt('column2')} />
-        </div>
-        <div
-          className="rb-col-cell"
-          onClick={() => addOutside(g, amt('column3'), 'column3')}
-          onContextMenu={(e) => { e.preventDefault(); removeOutside(g, amt('column3'), 'column3') }}
-        >
-          <div className="rb-label">2:1</div>
-          <ChipAmount amount={amt('column3')} />
-        </div>
-      </div>
+    <div
+      className={`rb-hit ${cls}`}
+      style={{ gridColumn: gc, gridRow: gr }}
+      onClick={onClick}
+      onContextMenu={onCtx}
+    >
+      {children}
     </div>
   )
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN COMPONENT
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Grid layout — 27 columns × 8 rows
+//
+//  Col  1 : zero (56 px)
+//  Col  2 : hit zone col between zero and numbers (12 px)
+//  Cols 3,5,7…25 (index = 2c+1 for c=1..12) : number columns (1fr each)
+//  Cols 4,6,8…26 (index = 2c+2 for c=1..12) : vertical hit / corner cols (12 px each)
+//  Col 27 : 2:1 column-bet cells (52 px)
+//
+//  Row 1 : top-number row    (54 px) — numbers 3,6,9…36
+//  Row 2 : H-split hit row   (12 px)
+//  Row 3 : mid-number row    (54 px) — numbers 2,5,8…35
+//  Row 4 : H-split hit row   (12 px)
+//  Row 5 : bot-number row    (54 px) — numbers 1,4,7…34
+//  Row 6 : street/line strip (12 px)
+//  Row 7 : dozens            (42 px)
+//  Row 8 : even-money bets   (42 px)
+//
+// Number formula:  n at column c (1..12), number-row r (1=top, 3=bot)
+//   n = 3c − (r−1)   →  c=1,r=1→3   c=1,r=3→1   c=12,r=1→36   c=12,r=3→34
+
+export default function RouletteBoard({
+  g,
+  winnerNumber = null,
+}: {
+  g: RouletteAPI
+  winnerNumber?: number | null
+}) {
+  const disabled = g.phase !== 'bet'
+  const amt = useAmount(g.bets)
+
+  const oi = (type: string, nums?: number | number[]) =>
+    () => addInside(g, type, nums)
+  const ri = (type: string, nums?: number | number[]) =>
+    (e: React.MouseEvent) => { e.preventDefault(); removeInside(g, amt(type, nums), type, nums) }
+  const oo = (type: string) =>
+    () => addOutside(g, amt(type), type)
+  const ro = (type: string) =>
+    (e: React.MouseEvent) => { e.preventDefault(); removeOutside(g, amt(type), type) }
+
+  return (
+    <div className="rb-board">
+      <div className="rb-htable">
+
+        {/* ── ZERO (col 1, rows 1-5) ──────────────────────────────────────── */}
+        <div className="rb-zero-cell" style={{ gridColumn: 1, gridRow: '1 / 6' }}>
+          <NumberCell
+            n={0} disabled={disabled} color="green"
+            amount={amt('straight', 0)} showDolly={winnerNumber === 0}
+            onAdd={oi('straight', 0)}
+            onRemove={() => removeInside(g, amt('straight', 0), 'straight', 0)}
+          />
+        </div>
+
+        {/* ── ZERO COMBOS (col 2: the thin hit column next to zero) ─────── */}
+        {/* trio023 [0,2,3] — between top-row 3 and mid-row 2 */}
+        <Hit cls="trio" gc={2} gr={2}
+          onClick={oi('trio023', [0,2,3])} onCtx={ri('trio023', [0,2,3])}>
+          <ChipAmount amount={amt('trio023', [0,2,3])} />
+        </Hit>
+        {/* first4 [0,1,2,3] — mid number row */}
+        <Hit cls="first4" gc={2} gr={3}
+          onClick={oi('first4', [0,1,2,3])} onCtx={ri('first4', [0,1,2,3])}>
+          <ChipAmount amount={amt('first4', [0,1,2,3])} />
+        </Hit>
+        {/* trio012 [0,1,2] — between mid-row 2 and bot-row 1 */}
+        <Hit cls="trio" gc={2} gr={4}
+          onClick={oi('trio012', [0,1,2])} onCtx={ri('trio012', [0,1,2])}>
+          <ChipAmount amount={amt('trio012', [0,1,2])} />
+        </Hit>
+
+        {/* ── 12 NUMBER COLUMNS ───────────────────────────────────────────── */}
+        {Array.from({ length: 12 }, (_, idx) => {
+          const c  = idx + 1          // column index 1..12
+          const gc = 2 * c + 1        // CSS grid column for numbers (3,5,7…25)
+          const hc = 2 * c + 2        // CSS grid hit column after this col (4,6,8…26)
+          const n3 = 3 * c            // top-row number (row 1)
+          const n2 = 3 * c - 1        // mid-row number (row 3)
+          const n1 = 3 * c - 2        // bot-row number (row 5)
+
+          return (
+            <React.Fragment key={c}>
+
+              {/* Number cells */}
+              <div style={{ gridColumn: gc, gridRow: 1 }}>
+                <NumberCell n={n3} disabled={disabled} color={colorOf(n3)}
+                  amount={amt('straight', n3)} showDolly={winnerNumber === n3}
+                  onAdd={oi('straight', n3)}
+                  onRemove={() => removeInside(g, amt('straight', n3), 'straight', n3)} />
+              </div>
+              <div style={{ gridColumn: gc, gridRow: 3 }}>
+                <NumberCell n={n2} disabled={disabled} color={colorOf(n2)}
+                  amount={amt('straight', n2)} showDolly={winnerNumber === n2}
+                  onAdd={oi('straight', n2)}
+                  onRemove={() => removeInside(g, amt('straight', n2), 'straight', n2)} />
+              </div>
+              <div style={{ gridColumn: gc, gridRow: 5 }}>
+                <NumberCell n={n1} disabled={disabled} color={colorOf(n1)}
+                  amount={amt('straight', n1)} showDolly={winnerNumber === n1}
+                  onAdd={oi('straight', n1)}
+                  onRemove={() => removeInside(g, amt('straight', n1), 'straight', n1)} />
+              </div>
+
+              {/* Horizontal splits (same column, between number rows) */}
+              {/* Between top (n3) and mid (n2): hit row 2 */}
+              <Hit cls="hsplit" gc={gc} gr={2}
+                onClick={oi('split', [n2, n3])} onCtx={ri('split', [n2, n3])}>
+                <ChipAmount amount={amt('split', [n2, n3])} />
+              </Hit>
+              {/* Between mid (n2) and bot (n1): hit row 4 */}
+              <Hit cls="hsplit" gc={gc} gr={4}
+                onClick={oi('split', [n1, n2])} onCtx={ri('split', [n1, n2])}>
+                <ChipAmount amount={amt('split', [n1, n2])} />
+              </Hit>
+
+              {/* Street bet (all 3 in this column): row 6 */}
+              <Hit cls="street" gc={gc} gr={6}
+                onClick={oi('street', [n1, n2, n3])} onCtx={ri('street', [n1, n2, n3])}>
+                <ChipAmount amount={amt('street', [n1, n2, n3])} />
+              </Hit>
+
+              {/* Between-column hits (only when a next column exists) */}
+              {c < 12 && (
+                <>
+                  {/* Vertical splits (between col c and c+1, each number row) */}
+                  <Hit cls="vsplit" gc={hc} gr={1}
+                    onClick={oi('split', [n3, n3+3])} onCtx={ri('split', [n3, n3+3])}>
+                    <ChipAmount amount={amt('split', [n3, n3+3])} />
+                  </Hit>
+                  <Hit cls="vsplit" gc={hc} gr={3}
+                    onClick={oi('split', [n2, n2+3])} onCtx={ri('split', [n2, n2+3])}>
+                    <ChipAmount amount={amt('split', [n2, n2+3])} />
+                  </Hit>
+                  <Hit cls="vsplit" gc={hc} gr={5}
+                    onClick={oi('split', [n1, n1+3])} onCtx={ri('split', [n1, n1+3])}>
+                    <ChipAmount amount={amt('split', [n1, n1+3])} />
+                  </Hit>
+
+                  {/* Corners (between col c and c+1, between number rows) */}
+                  <Hit cls="corner" gc={hc} gr={2}
+                    onClick={oi('corner', [n2, n3, n2+3, n3+3])}
+                    onCtx={ri('corner', [n2, n3, n2+3, n3+3])}>
+                    <ChipAmount amount={amt('corner', [n2, n3, n2+3, n3+3])} />
+                  </Hit>
+                  <Hit cls="corner" gc={hc} gr={4}
+                    onClick={oi('corner', [n1, n2, n1+3, n2+3])}
+                    onCtx={ri('corner', [n1, n2, n1+3, n2+3])}>
+                    <ChipAmount amount={amt('corner', [n1, n2, n1+3, n2+3])} />
+                  </Hit>
+
+                  {/* Line (double street: col c + col c+1) */}
+                  <Hit cls="line" gc={hc} gr={6}
+                    onClick={oi('line', [n1, n2, n3, n1+3, n2+3, n3+3])}
+                    onCtx={ri('line', [n1, n2, n3, n1+3, n2+3, n3+3])}>
+                    <ChipAmount amount={amt('line', [n1, n2, n3, n1+3, n2+3, n3+3])} />
+                  </Hit>
+                </>
+              )}
+            </React.Fragment>
+          )
+        })}
+
+        {/* ── 2:1 COLUMN BETS (col 27, rows 1/3/5) ────────────────────────── */}
+        {/* column3 = top row (3,6,9…36) */}
+        <div className="rb-col21" style={{ gridColumn: 27, gridRow: 1 }}
+          onClick={oo('column3')} onContextMenu={ro('column3')}>
+          <span className="rb-label">2:1</span>
+          <ChipAmount amount={amt('column3')} />
+        </div>
+        {/* column2 = mid row (2,5,8…35) */}
+        <div className="rb-col21" style={{ gridColumn: 27, gridRow: 3 }}
+          onClick={oo('column2')} onContextMenu={ro('column2')}>
+          <span className="rb-label">2:1</span>
+          <ChipAmount amount={amt('column2')} />
+        </div>
+        {/* column1 = bot row (1,4,7…34) */}
+        <div className="rb-col21" style={{ gridColumn: 27, gridRow: 5 }}
+          onClick={oo('column1')} onContextMenu={ro('column1')}>
+          <span className="rb-label">2:1</span>
+          <ChipAmount amount={amt('column1')} />
+        </div>
+
+        {/* ── DOZENS (row 7) ───────────────────────────────────────────────── */}
+        {/* 1st 12 (1–12): cols c=1..4  →  grid cols 3–10  →  3 / 11 */}
+        <div className="rb-outside dozen" style={{ gridColumn: '3 / 11', gridRow: 7 }}
+          onClick={oo('dozen1')} onContextMenu={ro('dozen1')}>
+          <span className="rb-label">1st 12</span>
+          <ChipAmount amount={amt('dozen1')} />
+        </div>
+        {/* 2nd 12 (13–24): cols c=5..8  →  grid cols 11–18  →  11 / 19 */}
+        <div className="rb-outside dozen" style={{ gridColumn: '11 / 19', gridRow: 7 }}
+          onClick={oo('dozen2')} onContextMenu={ro('dozen2')}>
+          <span className="rb-label">2nd 12</span>
+          <ChipAmount amount={amt('dozen2')} />
+        </div>
+        {/* 3rd 12 (25–36): cols c=9..12  →  grid cols 19–26  →  19 / 27 */}
+        <div className="rb-outside dozen" style={{ gridColumn: '19 / 27', gridRow: 7 }}
+          onClick={oo('dozen3')} onContextMenu={ro('dozen3')}>
+          <span className="rb-label">3rd 12</span>
+          <ChipAmount amount={amt('dozen3')} />
+        </div>
+
+        {/* ── EVEN-MONEY BETS (row 8, 6 × 4-col spans across cols 3–26) ──── */}
+        <div className="rb-outside even-money" style={{ gridColumn: '3 / 7', gridRow: 8 }}
+          onClick={oo('low')} onContextMenu={ro('low')}>
+          <span className="rb-label">1–18</span>
+          <ChipAmount amount={amt('low')} />
+        </div>
+        <div className="rb-outside even-money" style={{ gridColumn: '7 / 11', gridRow: 8 }}
+          onClick={oo('even')} onContextMenu={ro('even')}>
+          <span className="rb-label">EVEN</span>
+          <ChipAmount amount={amt('even')} />
+        </div>
+        <div className="rb-outside even-money red" style={{ gridColumn: '11 / 15', gridRow: 8 }}
+          onClick={oo('red')} onContextMenu={ro('red')}>
+          <span className="rb-label">RED ♦</span>
+          <ChipAmount amount={amt('red')} />
+        </div>
+        <div className="rb-outside even-money black" style={{ gridColumn: '15 / 19', gridRow: 8 }}
+          onClick={oo('black')} onContextMenu={ro('black')}>
+          <span className="rb-label">BLK ♠</span>
+          <ChipAmount amount={amt('black')} />
+        </div>
+        <div className="rb-outside even-money" style={{ gridColumn: '19 / 23', gridRow: 8 }}
+          onClick={oo('odd')} onContextMenu={ro('odd')}>
+          <span className="rb-label">ODD</span>
+          <ChipAmount amount={amt('odd')} />
+        </div>
+        <div className="rb-outside even-money" style={{ gridColumn: '23 / 27', gridRow: 8 }}
+          onClick={oo('high')} onContextMenu={ro('high')}>
+          <span className="rb-label">19–36</span>
+          <ChipAmount amount={amt('high')} />
+        </div>
+
+      </div>
+    </div>
+  )
+}

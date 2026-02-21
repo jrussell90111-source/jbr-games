@@ -339,92 +339,8 @@ button:disabled { opacity: .6 }
   transition: transform 120ms ease;
 }
 /* ===================================================================
-   ROULETTE — green felt board, white grid, side rails (casino style)
+   ROULETTE — horizontal casino-style felt board
    =================================================================== */
-
-/* ------------------------ GLOBAL KNOBS ------------------------ */
-:root {
-  /* Numbers grid sizing */
-  --cellW: 120px;                    /* width of EACH number column (tweak me) */
-  --cellH: clamp(40px, 11vw, 80px);  /* height of number cells */
-  --splitH: 8px;                     /* slim band between rows */
-  --gridLine: 2px;                   /* white grid line thickness */
-  --railW: 20px;                     /* INTERNAL rail track inside grid (streets/lines column) */
-
-  /* Board inset (push grid content down from top frame) */
-  --topInset: 16px;
-
-  /* Zero row + oval */
-  --zeroH: calc(var(--cellH) + 2px);
-  --zeroOvalW: 60%;
-  --zeroOvalH: 120%;
-  --zeroOvalShiftX: 0px;
-  --zeroOvalShiftY: -10px;
-
-  /* Number ovals */
-  --ovalW: 85%;
-  --ovalH: 200%;
-  --ovalShiftX: 0px;
-  --ovalShiftY: -25px;
-
-  /* First number row (optional overrides) */
-  --row1H: var(--cellH);
-  --row1GridLine: var(--gridLine);
-  --row1OvalW: var(--ovalW);
-  --row1OvalH: var(--ovalH);
-  --row1OvalShiftX: var(--ovalShiftX);
-  --row1OvalShiftY: var(--ovalShiftY);
-
-  /* Inside-hit alignment */
-  --hsplitW: 2px;   --hsplitInsetY: 1%;  --hsplitShiftX: 0px;  --hsplitShiftY: -51px;
-  --vsplitH: 2px;   --vsplitInsetX: 1%;  --vsplitShiftX: 0px;  --vsplitShiftY: -11px;
-  --cornerSize: 12px;  --cornerShiftX: 0px;  --cornerShiftY: -11px;
-  --streetW: 2px;   --streetInsetY: 1%;  --streetShiftX: -14px; --streetShiftY: -50px;
-  --lineSize: 12px; --lineShiftX: -11px; --lineShiftY: 27px;
-
-  /* Chips (inside targets) */
-  --chipSize: 32px; --chipBorder: 2px;
-  --chipNumX: 28px;   --chipNumY: -25px;
-  --chipHsplitX: 0px; --chipHsplitY: 0px;
-  --chipVsplitX: 0px; --chipVsplitY: 0px;
-  --chipCornerX: 0px; --chipCornerY: 0px;
-  --chipStreetX: 0px; --chipStreetY: 0px;
-  --chipLineX: 0px;   --chipLineY: 0px;
-
-  /* Chip felt halo */
-  --chipHaloGrowX: 5px; --chipHaloGrowY: 5px;
-  --chipHaloShiftX: 0px; --chipHaloShiftY: 0px;
-  --chipHaloGrowYCorner: 18px; --chipHaloShiftYCorner: 1px;
-  --chipHaloGrowYLine:   20px; --chipHaloShiftYLine:   2px;
-
-  /* Side layout (left dozens rail | grid | right even-money rail) */
-  --sideW: 100px;     /* OUTER rail columns (left & right) */
-  --sideGap: 10px;    /* gap between each rail and the grid */
-
-  /* Left rail (dozens) — geometry & look */
-  --dozenRailW: var(--sideW);
-  --dozenTopAdjust: 0px;        /* nudge the start under the 0 row (negative = up) */
-  --dozenHeightAdjust: 0px;     /* stretch/contract the total stack height */
-  --dozenRowGap: 0px;           /* space between 1st/2nd/3rd boxes */
-  --dozenNudgeX: 0px;
-  --dozenNudgeY: 0px;
-  --dozenBorder: var(--gridLine);
-  --dozenBg: #35654d;
-  --dozenColor: #fff;
-  --dozenWritingMode: vertical-rl; /* top→bottom text flow */
-  --dozenRotate: 180deg;           /* make it read left→right from the side */
-  --dozenFont: 800 13px/1.1 system-ui, sans-serif;
-  --dozenLabelPad: 6px;
-
-  /* Bottom columns strip */
-  --colH: 48px;
-
-  /* Outside-chip knobs (rails & bottom strip) */
-  --chipOutsideSize: 44px;
-  --chipOutsideBorder: 3px;
-  --chipOutsideX: 0px;
-  --chipOutsideY: 0px;
-}
 
 /* ------------------------ WHEEL ------------------------ */
 .rw-wrap { position: relative; width: 160px; height: 160px; flex: 0 0 160px; }
@@ -447,271 +363,206 @@ button:disabled { opacity: .6 }
   filter: drop-shadow(0 1px 2px rgba(0,0,0,.4));
 }
 
-/* ------------------------ BOARD WRAPS ------------------------ */
-.rb-board { display: flex; flex-direction: column; gap: 10px; user-select: none; overflow-x: auto; }
-.rb-layout {
+/* ======================== BOARD SHELL ======================== */
+.rb-board { display: flex; flex-direction: column; gap: 10px; user-select: none; }
+.rb-board-wrap { width: 100%; overflow-x: auto; padding-bottom: 4px; }
+
+/* ======================== HORIZONTAL TABLE GRID ========================
+   27 columns × 8 rows — see RouletteBoard.tsx header comment for full spec
+   ====================================================================== */
+.rb-htable {
   display: grid;
-
-.rb-layout {
-  grid-template-columns:
-    var(--sideW)
-    var(--sideGap)
-    calc(3 * var(--cellW) + var(--railW) + 2 * var(--gridLine))  /* exact width of .rb-grid */
-    var(--sideGap)
-    var(--sideW);
-}
-
-  align-items: start; gap: 0;
-  width: max-content;               /* don’t squeeze; expand to natural width */
-  margin-inline: auto;              /* center when wider than viewport */
-  flex: 0 0 auto;                   /* avoid flex parents squashing it */
-}
-
-/* ------------------------ MAIN NUMBERS GRID ------------------------ */
-.rb-grid {
-  display: grid;
-  grid-template-columns: repeat(3, var(--cellW)) var(--railW); /* 3 fixed-width columns + internal rail */
-  grid-template-rows:
-    var(--zeroH)
-    var(--row1H) var(--splitH)
-    repeat(11, var(--cellH) var(--splitH));
+  grid-template-columns: 56px 12px repeat(12, 1fr 12px) 52px;
+  grid-template-rows: 54px 12px 54px 12px 54px 12px 42px 42px;
   gap: 0;
   background: #35654d;
-  border: var(--gridLine) solid #fff;
-  border-radius: 12px;
+  border: 2px solid rgba(255,255,255,0.7);
+  border-radius: 10px;
   overflow: hidden;
+  width: max-content;
+  min-width: min(860px, 95vw);
+  margin-inline: auto;
   position: relative;
   isolation: isolate;
-  padding-top: var(--topInset);
 }
-/* Continue the internal rail divider through the top inset */
-.rb-grid::before {
-  content: "";
-  position: absolute;
-  right: var(--railW);
-  top: var(--gridLine);
-  width: var(--gridLine);
-  height: var(--topInset);
-  background: #fff;
+
+/* ======================== NUMBER CELLS ======================== */
+.rb-cell.num {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%; height: 100%;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.28);
+  background: #35654d;
+}
+.rb-cell.num.red   { background: #9a1a1a; }
+.rb-cell.num.black { background: #111; }
+.rb-cell.num.green { background: #0f7b3a; }
+.rb-cell.num.disabled { opacity: .6; cursor: not-allowed; }
+.rb-cell.num:not(.disabled):hover { filter: brightness(1.3); }
+
+.rb-num-label {
+  font-size: clamp(9px, 1.3vw, 16px);
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.6);
+  user-select: none;
+  letter-spacing: .2px;
+}
+
+/* Zero cell */
+.rb-zero-cell {
+  position: relative;
+  background: #0c6e33;
+  border-right: 2px solid rgba(255,255,255,0.7);
+}
+.rb-zero-cell .rb-cell.num {
+  background: transparent;
+  border: none;
+}
+.rb-zero-cell .rb-num-label { font-size: clamp(12px, 1.8vw, 20px); }
+
+/* ======================== INSIDE HIT ZONES ======================== */
+.rb-hit {
+  position: relative;
+  z-index: 20;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 80ms;
+}
+.rb-hit:hover { background: rgba(255,255,255,0.22); }
+
+/* Visual indicator dots / bars */
+.rb-hit.hsplit::after,
+.rb-hit.vsplit::after {
+  content: ‘’;
+  display: block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.65);
+  border: 1px solid rgba(255,255,255,0.9);
   pointer-events: none;
 }
-/* Internal right rail stripe inside the grid area */
-.rb-rail { background:#35654d; border-left: var(--gridLine) solid #fff; z-index: 1; }
-
-/* Number cells */
-.rb-cell.num {
-  position: relative; display: grid; place-items: center;
-  cursor: pointer; font-weight: 700; letter-spacing: .2px;
-  background: #35654d; border-bottom: var(--gridLine) solid #fff;
+.rb-hit.corner::after,
+.rb-hit.trio::after,
+.rb-hit.first4::after {
+  content: ‘’;
+  display: block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.65);
+  border: 1px solid rgba(255,255,255,0.9);
+  pointer-events: none;
 }
-.rb-cell.disabled { opacity: .6; cursor: not-allowed; }
-/* vertical grid lines after col 1 & 2 */
-.rb-grid .c1 > .rb-cell.num, .rb-grid .c2 > .rb-cell.num { border-right: var(--gridLine) solid #fff; }
-
-/* Ovals */
-.rb-oval { display: grid; place-items: center; width: var(--ovalW); height: var(--ovalH);
-  border-radius: 999px; box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 2px 4px rgba(0,0,0,.25);
-  transform: translate(var(--ovalShiftX), var(--ovalShiftY));
+.rb-hit.street::after {
+  content: ‘’;
+  display: block;
+  width: 5px; height: 16px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.55);
+  border: 1px solid rgba(255,255,255,0.9);
+  pointer-events: none;
 }
-.rb-oval .rb-oval-num {
-  font-weight: 800; font-variant-numeric: tabular-nums;
-  font-size: clamp(18px, 2.4vw, 28px); text-shadow: 0 1px 1px rgba(0,0,0,.25);
-}
-.rb-oval.red { background: #b41515; color: #fff; }
-.rb-oval.black { background: #000; color: #fff; }
-.rb-oval.green { background: #0f7b3a; color: #fff; }
-
-/* Zero cell oval tweaks */
-.rb-zero .rb-oval { width: var(--zeroOvalW); height: var(--zeroOvalH);
-  transform: translate(var(--zeroOvalShiftX), var(--zeroOvalShiftY)); }
-
-/* First row special casing */
-.rb-grid [data-row="1"] > .rb-cell.num { border-bottom-width: var(--row1GridLine); }
-.rb-grid [data-row="1"].c1 > .rb-cell.num,
-.rb-grid [data-row="1"].c2 > .rb-cell.num { border-right-width: var(--row1GridLine); }
-.rb-grid [data-row="1"] .rb-oval {
-  width: var(--row1OvalW); height: var(--row1OvalH);
-  transform: translate(var(--row1OvalShiftX), var(--row1OvalShiftY));
+.rb-hit.line::after {
+  content: ‘’;
+  display: block;
+  width: 5px; height: 8px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.55);
+  border: 1px solid rgba(255,255,255,0.9);
+  pointer-events: none;
 }
 
-/* ------------------------ INSIDE HIT ZONES ------------------------ */
-.rb-hit { position: relative; z-index: 20; }
-.rb-hit.hsplit {
-  justify-self: center; width: var(--hsplitW);
-  height: calc(100% - (2 * var(--hsplitInsetY))); align-self: center;
-  border: 2px solid rgba(255,255,255,.9); background: #d3d3d3; opacity: 1; border-radius: 4px;
-  transform: translate(var(--hsplitShiftX), var(--hsplitShiftY));
-}
-.rb-hit.vsplit {
-  align-self: center; height: var(--vsplitH);
-  width: calc(100% - (2 * var(--vsplitInsetX))); justify-self: center;
-  border: 2px solid rgba(255,255,255,.9); background: #d3d3d3; opacity: 1; border-radius: 4px;
-  transform: translate(var(--vsplitShiftX), var(--vsplitShiftY));
-}
-.rb-hit.corner {
-  width: var(--cornerSize); height: var(--cornerSize); align-self: center; justify-self: center;
-  border-radius: 4px; border: 2px solid rgba(255,255,255,.95); background: #d3d3d3; opacity: 1;
-  transform: translate(var(--cornerShiftX), var(--cornerShiftY)); will-change: transform;
-}
-.rb-hit.street {
-  justify-self: end; width: var(--streetW);
-  height: calc(100% - (2 * var(--streetInsetY))); margin-right: 2px;
-  border: 2px solid rgba(255,255,255,.95); background: #d3d3d3; opacity: 1; border-radius: 4px;
-  transform: translate(var(--streetShiftX), var(--streetShiftY));
-}
-.rb-hit.line {
-  justify-self: end; width: var(--lineSize); height: var(--lineSize); margin-right: 2px;
-  border: 2px solid rgba(255,255,255,.95); background: #d3d3d3; opacity: 1; border-radius: 4px;
-  transform: translate(var(--lineShiftX), var(--lineShiftY));
-}
-.rb-hit.trio, .rb-hit.first4 {
-  justify-self: center; align-self: center; width: 20px; height: 20px;
-  border-radius: 50%; border: 2px solid rgba(255,255,255,.95); background: #d3d3d3; opacity: 1;
-}
-.rb-hit:hover { box-shadow: 0 0 0 2px rgba(255,255,255,.35) inset; }
-
-/* ------------------------ CHIPS & DOLLY ------------------------ */
+/* ======================== CHIPS & DOLLY ======================== */
 .rb-chips {
-  position: absolute; left: 50%; top: 50%;
-  transform: translate(calc(-50% + var(--chipOffsetX, 0px)), calc(-50% + var(--chipOffsetY, 0px)));
-  display: flex; align-items: flex-end; z-index: 300; pointer-events: none; will-change: transform;
-}
-.rb-chips::before {
-  content: ""; position: absolute; left: 50%; top: 50%;
-  transform: translate(calc(-50% + var(--chipHaloShiftX, 0px)), calc(-50% + var(--chipHaloShiftY, 0px)));
-  width:  calc(var(--chipSize, 32px) + var(--chipHaloGrowX, 6px));
-  height: calc(var(--chipSize, 32px) + var(--chipHaloGrowY, 6px));
-  border-radius: 50%; background: #35654d; box-shadow: 0 0 0 2px #35654d; z-index: 0;
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex; align-items: center;
+  z-index: 300;
+  pointer-events: none;
 }
 .rb-chip {
-  position: relative; z-index: 1; width: var(--chipSize, 32px); height: var(--chipSize, 32px);
-  border-radius: 50%; border: var(--chipBorder, 2px) solid #fff;
+  position: relative;
+  z-index: 1;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 2px solid #fff;
   background-color: #2a6ec9;
   background-image: radial-gradient(circle at 30% 30%, rgba(255,255,255,.6), rgba(255,255,255,0) 40%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 2px 4px rgba(0,0,0,.45);
+  display: grid; place-items: center;
 }
 .rb-chip-label {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -48%);
-  font-weight: 800; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.6);
-  font-size: calc(var(--chipSize, 32px) * 0.42); line-height: 1; letter-spacing: .3px;
-  user-select: none; pointer-events: none;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0,0,0,.6);
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: .2px;
+  user-select: none;
+  pointer-events: none;
 }
-/* Map chip offsets by parent */
-.rb-cell.num > .rb-chips      { --chipOffsetX: var(--chipNumX);     --chipOffsetY: var(--chipNumY); }
-.rb-hit.hsplit  > .rb-chips   { --chipOffsetX: var(--chipHsplitX);  --chipOffsetY: var(--chipHsplitY); }
-.rb-hit.vsplit  > .rb-chips   { --chipOffsetX: var(--chipVsplitX);  --chipOffsetY: var(--chipVsplitY); }
-.rb-hit.street  > .rb-chips   { --chipOffsetX: var(--chipStreetX);  --chipOffsetY: var(--chipStreetY); }
-.rb-hit.corner  > .rb-chips   { --chipOffsetX: var(--chipCornerX);  --chipOffsetY: var(--chipCornerY); }
-.rb-hit.line    > .rb-chips   { --chipOffsetX: var(--chipLineX);    --chipOffsetY: var(--chipLineY); }
-.rb-hit.corner > .rb-chips::before { --chipHaloGrowY: var(--chipHaloGrowYCorner); --chipHaloShiftY: var(--chipHaloShiftYCorner); }
-.rb-hit.line   > .rb-chips::before { --chipHaloGrowY: var(--chipHaloGrowYLine);   --chipHaloShiftY: var(--chipHaloShiftYLine); }
-
-/* Dolly marker above chips */
 .rb-dolly {
-  position: absolute; width: 36px; height: 36px; border-radius: 50%;
-  background: #fff; color: #000; display: grid; place-items: center; font-weight: 800;
-  box-shadow: 0 2px 8px rgba(0,0,0,.45), inset 0 -2px 0 rgba(0,0,0,.12);
+  position: absolute;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: #fff; color: #000;
+  display: grid; place-items: center;
+  font-weight: 800; font-size: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.45);
   z-index: 400;
 }
 
-/* ------------------------ SIDE RAILS ------------------------ */
-/* Left rail column sized to the full grid block height */
-.rb-rail-left {
-  position: relative; grid-column: 1; width: var(--dozenRailW);
-  height: calc(var(--topInset) + var(--zeroH) + (var(--row1H) + var(--splitH) + 11 * (var(--cellH) + var(--splitH))));
+/* ======================== 2:1 COLUMN BETS ======================== */
+.rb-col21 {
+  position: relative;
+  display: grid; place-items: center;
+  cursor: pointer;
+  background: #2a5e40;
+  border-left: 2px solid rgba(255,255,255,0.7);
+  border-bottom: 1px solid rgba(255,255,255,0.28);
+  transition: filter 80ms;
 }
-/* Dozens absolute stack aligned directly under zero row */
-.rb-dozens-stack {
-  position: absolute; left: 0;
-  top: calc(var(--topInset) + var(--zeroH) + var(--dozenTopAdjust));
-  width: 100%;
-  height: calc((var(--row1H) + var(--splitH) + 11 * (var(--cellH) + var(--splitH))) + var(--dozenHeightAdjust));
-  display: grid; grid-template-rows: repeat(3, 1fr);
-  row-gap: var(--dozenRowGap);
-  transform: translate(var(--dozenNudgeX), var(--dozenNudgeY));
-}
-/* Dozen boxes (square, white border, vertical text) */
-.rb-rail-left .rb-rail-cell.rb-dozen {
-  position: relative; margin: 0; height: auto; min-height: 0;
-  background: var(--dozenBg); color: var(--dozenColor);
-  border: var(--dozenBorder) solid #fff; border-radius: 0;
-  display: grid; place-items: center; cursor: pointer;
-}
-.rb-rail-left .rb-rail-cell.rb-dozen .rb-label {
-  writing-mode: var(--dozenWritingMode); text-orientation: mixed;
-  transform: rotate(var(--dozenRotate)); font: var(--dozenFont); padding: var(--dozenLabelPad);
-  letter-spacing: .5px; text-shadow: 0 1px 1px rgba(0,0,0,.25); user-select: none;
-}
-/* Chips on dozen boxes */
-.rb-rail-left .rb-rail-cell.rb-dozen > .rb-chips {
-  --chipSize: var(--chipOutsideSize); --chipBorder: var(--chipOutsideBorder);
-  --chipOffsetX: var(--chipOutsideX); --chipOffsetY: var(--chipOutsideY);
+.rb-col21:hover { filter: brightness(1.25); }
+.rb-col21 .rb-label {
+  font-size: 10px; font-weight: 800; color: #fff;
+  text-shadow: 0 1px 1px rgba(0,0,0,.4);
+  user-select: none; letter-spacing: .3px;
 }
 
-/* Right rail (even-money) */
-.rb-rail-right { grid-column: 5; display: flex; flex-direction: column; gap: 8px; }
-.rb-rail-cell {
-  position: relative; display: grid; place-items: center;
-  height: 56px; padding: 6px; background: #35654d; color: #fff;
-  border: var(--gridLine) solid #fff; border-radius: 12px; cursor: pointer;
-  font-weight: 700; letter-spacing: .2px;
+/* ======================== DOZENS & EVEN-MONEY ======================== */
+.rb-outside {
+  position: relative;
+  display: grid; place-items: center;
+  cursor: pointer;
+  background: #2d6147;
+  border: 1px solid rgba(255,255,255,0.28);
+  border-top: 2px solid rgba(255,255,255,0.7);
+  transition: filter 80ms;
 }
-.rb-rail-cell .rb-label { text-shadow: 0 1px 1px rgba(0,0,0,.25); }
-.rb-rail-cell.rb-rail-red   { background: linear-gradient(0deg, #7b1313, #a31919); }
-.rb-rail-cell.rb-rail-black { background: linear-gradient(0deg, #0f0f0f, #1a1a1a); }
-/* Chips on right-rail cells */
-.rb-rail-cell > .rb-chips {
-  --chipSize: var(--chipOutsideSize); --chipBorder: var(--chipOutsideBorder);
-  --chipOffsetX: var(--chipOutsideX); --chipOffsetY: var(--chipOutsideY);
-}
-
-/* ------------------------ BOTTOM COLUMNS STRIP ------------------------ */
-.rb-cols-bottom {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; margin-top: 10px;
-}
-.rb-col-cell {
-  position: relative; display: grid; place-items: center;
-  height: var(--colH); background: #35654d; color: #fff;
-  border: var(--gridLine) solid #fff; border-radius: 12px; cursor: pointer;
-  font-weight: 800; letter-spacing: .2px; text-transform: uppercase;
-}
-.rb-col-cell > .rb-chips {
-  --chipSize: var(--chipOutsideSize); --chipBorder: var(--chipOutsideBorder);
-  --chipOffsetX: var(--chipOutsideX); --chipOffsetY: var(--chipOutsideY);
+.rb-outside:hover { filter: brightness(1.25); }
+.rb-outside.red   { background: linear-gradient(180deg, #8b1515, #a01e1e); }
+.rb-outside.black { background: linear-gradient(180deg, #111, #1e1e1e); }
+.rb-outside .rb-label {
+  font-size: 11px; font-weight: 800; color: #fff;
+  text-shadow: 0 1px 1px rgba(0,0,0,.4);
+  user-select: none; letter-spacing: .4px;
 }
 
-/* ------------------------ MISC ------------------------ */
-.rb-actions { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 10px;
-  margin-top: 10px; padding: 10px; background: rgba(19,36,28,.92); border: 1px solid rgba(255,255,255,.12);
-  border-radius: 10px; z-index: 500; backdrop-filter: blur(2px);
+/* ======================== ACTIONS BAR ======================== */
+.rb-actions {
+  position: sticky; bottom: 0;
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  margin-top: 10px; padding: 10px;
+  background: rgba(19,36,28,.92);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  z-index: 500;
+  backdrop-filter: blur(2px);
 }
 .rb-actions .primary { font-weight: 700; }
 .rb-outcome { font-size: 14px; opacity: .95; }
-
-/* ------------------------ RESPONSIVE ------------------------ */
-@media (max-width: 420px) {
-  :root {
-    --cellH: 200px;
-    --ovalW: 92%; --ovalH: 94%;
-    --sideW: 86px; --sideGap: 8px;
-    --colH: 44px;
-    --cellW: 96px;
-  }
-}
-
-/* Let the board expand to its natural width; scroll if it overflows */
-.rb-board,
-.rb-board-wrap { width: 100%; overflow-x: auto; }
-
-/* Make sure the layout itself doesn’t get squashed by a flex/grid parent */
-.rb-layout { width: max-content; flex: 0 0 auto; }
-
-/* Belt-and-suspenders: the layout’s minimum width is exactly rails + grid */
-.rb-layout {
-  min-width: calc(
-    var(--sideW) + var(--sideGap)
-    + (3 * var(--cellW) + var(--railW) + 2 * var(--gridLine))
-    + var(--sideGap) + var(--sideW)
-  );
-}
 
