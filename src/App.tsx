@@ -12,6 +12,10 @@ import './styles.css'
 import BlackjackScreen from './BlackjackScreen'
 import { BJ10_RULES, BJ15_RULES, BJ25_RULES } from './games/blackjack'
 
+//Roulette
+import RouletteScreen from './RouletteScreen'
+
+
 /* ------------------------------------------------------------------ */
 /*                     TWO-STAGE LOADER: CONFIG                       */
 /* ------------------------------------------------------------------ */
@@ -25,17 +29,25 @@ const asset = (p: string) => `${BASE}${p.replace(/^\//, '')}`
 
 // Audio assets to warm (non-blocking stage)
 const AUDIO_URLS = [
-  asset('audio/click.mp3'),
-  asset('audio/click-hi.mp3'),
-  asset('audio/thud.mp3'),
-  asset('audio/deal-burst.mp3'),
-  asset('audio/draw.mp3'),
-  asset('audio/hold-on.mp3'),
-  asset('audio/hold-off.mp3'),
-  asset('audio/win-small.mp3'),
-  asset('audio/win-med.mp3'),
-  asset('audio/win-big.mp3'),
-  asset('audio/win-royal.mp3'),
+  asset('audio/click.wav'),
+  asset('audio/click-hi.wav'),
+  asset('audio/thud.wav'),
+  asset('audio/deal-burst.wav'),
+  asset('audio/draw.wav'),
+  asset('audio/hold-on.wav'),
+  asset('audio/hold-off.wav'),
+  asset('audio/win-small.wav'),
+  asset('audio/win-med.wav'),
+  asset('audio/win-big.wav'),
+  asset('audio/win-royal.wav'),
+  asset('audio/roulette_chip_up.wav'),
+  asset('audio/roulette_chip_down.wav'),
+  asset('audio/roulette_tick.wav'),
+  asset('audio/roulette_dolly.wav'),
+  asset('audio/roulette_lose.wav'),
+  asset('audio/roulette_wheel_8s_ball_drop.wav'),
+  asset('audio/roulette_wheel_9s_ball_drop.wav'),
+  asset('audio/roulette_wheel_10s.wav'),
 ]
 
 /* ------------------------------------------------------------------ */
@@ -216,7 +228,7 @@ function PaytableAny({
 
 export default function App(){
   // Screens: menu + poker games + blackjack tables
-  const [screen, setScreen] = useState<'menu' | 'job' | 'dw' | 'ddb' | 'bj10' | 'bj15' | 'bj25'>('job')
+  const [screen, setScreen] = useState<'menu' | 'job' | 'dw' | 'ddb' | 'bj10' | 'bj15' | 'bj25' | 'roulette'>('job')
 
   // Poker specs
   const isPoker = (screen === 'job' || screen === 'dw' || screen === 'ddb')
@@ -528,6 +540,16 @@ export default function App(){
               <div className="gameTileSub">8/5 paytable</div>
             </button>
 
+	    {/* Roulette */}
+            <button
+              type="button"
+              className="gameTile"
+              onClick={() => { audio.clickHi(); setScreen('roulette') }}
+            >
+              <div className="gameTileTitle">Roulette</div>
+              <div className="gameTileSub">Single zero · $2 chips</div>
+            </button>
+
             {/* Deuces Wild */}
             <button
               type="button"
@@ -728,6 +750,9 @@ export default function App(){
           onBack={() => setScreen('menu')}
         />
       )}
+
+      {/* ========== Roulette SCREENS ========== */}
+      {screen === 'roulette' && <RouletteScreen />}
 
       {/* ========= SETTINGS MODAL (Poker only) ========= */}
       {settingsOpen && (

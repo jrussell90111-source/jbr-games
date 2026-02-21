@@ -7,6 +7,17 @@ import {
   valueOfHand, isPair, blackjackMultiplier, basicStrategyAction
 } from './games/blackjack'
 
+// Ten-valued ranks (all count as 10)
+const TEN_RANKS = new Set(['10', 'J', 'Q', 'K'])
+
+/** True if the two cards are the same rank OR both are 10-valued (10/J/Q/K). */
+function isPairOrTenVal(cards: Card[]): boolean {
+  if (cards.length !== 2) return false
+  const [a, b] = cards
+  if (a.rank === b.rank) return true
+  return TEN_RANKS.has(a.rank) && TEN_RANKS.has(b.rank)
+}
+
 type Phase = 'bet' | 'insurance' | 'player' | 'dealer' | 'settle' | 'show'
 
 const BANK_KEY        = 'bank_balance'
@@ -539,7 +550,7 @@ export function useBlackjack(rules: BlackjackRules) {
     if (phaseRef.current !== 'player') return false
     const h = handsRef.current[activeIndexRef.current]
     if (!h) return false
-    if (!isPair(h.cards)) return false
+    if (!isPairOrTenVal(h.cards)) return false 
     if (credits < h.bet) return false
     if (handsRef.current.length >= rules.maxSplits) return false
     const isAcesPair = h.cards[0].rank === 'A' && h.cards[1].rank === 'A'
@@ -795,7 +806,7 @@ export function useBlackjack(rules: BlackjackRules) {
 
   const canSplt = useMemo(() => {
     if (phase !== 'player' || !activeHand) return false
-    if (!isPair(activeHand.cards)) return false
+    if (!isPairOrTenVal(activeHand.cards)) return false
     if (credits < activeHand.bet) return false
     if (hands.length >= rules.maxSplits) return false
     const isAcesPair = activeHand.cards[0].rank === 'A' && activeHand.cards[1].rank === 'A'

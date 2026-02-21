@@ -14,3 +14,8 @@ pnpm-debug.log*
 # env
 .env
 .env.*.local
+
+# Backup save files
+src/*.sav
+src/*.sav[0-9]
+src/*.sav[0-9][0-9]

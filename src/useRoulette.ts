@@ -1,12 +1,13 @@
 // src/useRoulette.ts
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import { spinWheel, settleAll, type RouletteBet, type RouletteOutcome } from './games/roulette'
+import { audio } from './audio'
 
 // Reuse shared bank keys like the other games
-const BANK_KEY        = 'bank_balance'
-const CREDITS_KEY     = 'credits'
-const P_IN_KEY        = 'bank_in_total'
-const P_OUT_KEY       = 'bank_out_total'
+const BANK_KEY    = 'bank_balance'
+const CREDITS_KEY = 'credits'
+const P_IN_KEY    = 'bank_in_total'
+const P_OUT_KEY   = 'bank_out_total'
 
 function readNum(key: string, def = 0) {
   const n = Number(localStorage.getItem(key))
@@ -18,12 +19,26 @@ function writeNum(key: string, val: number) {
 
 type Phase = 'bet' | 'spin' | 'show'
 
+// Map win size to poker tiers for audio.win(...)
+function winTierFor(net: number, stake: number): 'small'|'med'|'big'|'royal' {
+  const mult = stake > 0 ? net / stake : 0
+  if (mult >= 30) return 'royal'  // straight (35:1) + stacks
+  if (mult >= 8)  return 'big'    // chunky wins
+  if (mult >= 2)  return 'med'    // decent wins
+  return 'small'                  // any positive but modest win
+}
+
 export function useRoulette() {
   const [credits, setCredits] = useState<number>(() => readNum(CREDITS_KEY, 200))
   const [phase, setPhase] = useState<Phase>('bet')
   const [bets, setBets] = useState<RouletteBet[]>([])
   const [outcome, setOutcome] = useState<RouletteOutcome | null>(null)
   const [lastNet, setLastNet] = useState<number | null>(null)
+
+  // Spin timing & housekeeping
+  const [spinMs, setSpinMs] = useState<number>(0)
+  const spinTimerRef = useRef<number | null>(null)
+  const stopSpinAudioRef = useRef<(() => void) | null>(null)
 
   // persist credits like other games
   function syncCredits(n: number) {
@@ -60,48 +75,93 @@ export function useRoulette() {
 
   function addBet(b: RouletteBet) {
     if (phase !== 'bet') return
-    setBets(prev => prev.concat(b))
+    setBets(prev => {
+      const next = prev.concat(b)
+      try { audio.chipUp() } catch {}
+      return next
+    })
   }
   function removeBet(idx: number) {
     if (phase !== 'bet') return
-    setBets(prev => prev.filter((_,i)=>i!==idx))
+    setBets(prev => {
+      const next = prev.filter((_,i)=>i!==idx)
+      try { audio.chipDown() } catch {}
+      return next
+    })
   }
   function clearBets() {
     if (phase !== 'bet') return
     setBets([])
   }
 
-  // spin + settlement
+  // spin + settlement (timed to WAV duration)
   function spin() {
     if (!canSpin) return
     setPhase('spin')
-    // Deduct stake now
-    syncCredits(+(credits - totalStake).toFixed(2))
 
-    // Simulate a quick spin (no timers yet; add animation later)
+    // Deduct stake now
+    const next = +(credits - totalStake).toFixed(2)
+    syncCredits(next)
+
+    // Start the WAV and get exact duration
+    const { durationMs, stop } = audio.rouletteSpinPlay()
+    stopSpinAudioRef.current = stop
+    setSpinMs(durationMs)
+
+    // Decide the outcome now (keep hidden until reveal)
     const o = spinWheel()
-    setOutcome(o)
-    const { returned, net } = settleAll(bets, o)
-    if (returned > 0) syncCredits(+(readNum(CREDITS_KEY, 0) + returned).toFixed(2))
-    setLastNet(+net.toFixed(2))
-    setPhase('show')
+
+    // Schedule reveal exactly at clip end
+    if (spinTimerRef.current !== null) clearTimeout(spinTimerRef.current)
+    spinTimerRef.current = window.setTimeout(() => {
+      setOutcome(o)
+      const { returned, net, stake } = settleAll(bets, o) // expect stake in return shape
+      if (returned > 0) syncCredits(+(readNum(CREDITS_KEY, 0) + returned).toFixed(2))
+      setLastNet(+net.toFixed(2))
+      setPhase('show')
+
+      // Sounds: dolly + tiered win/lose
+      try { audio.dolly() } catch {}
+      if (net > 0) {
+        try { audio.win(winTierFor(net, stake)) } catch {}
+      } else if (net < 0) {
+        try { audio.lose() } catch {}
+      }
+
+      stopSpinAudioRef.current = null
+      spinTimerRef.current = null
+    }, durationMs)
   }
 
   function newRound() {
+    // Stop any in-flight audio/timer if user skips
+    try { stopSpinAudioRef.current?.() } catch {}
+    if (spinTimerRef.current !== null) { clearTimeout(spinTimerRef.current); spinTimerRef.current = null }
+
     setBets([])
     setOutcome(null)
     setLastNet(null)
+    setSpinMs(0)
     setPhase('bet')
   }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      try { stopSpinAudioRef.current?.() } catch {}
+      if (spinTimerRef.current !== null) clearTimeout(spinTimerRef.current)
+    }
+  }, [])
 
   return {
     // money
     credits, insert, cashOutAll,
     // round
-    phase, canSpin, spin, newRound,
+    phase, canSpin, spin, newRound, spinMs,
     // bets
     bets, addBet, removeBet, clearBets, totalStake,
     // result
     outcome, lastNet,
   }
 }
+
