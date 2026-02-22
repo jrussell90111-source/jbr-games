@@ -15,7 +15,7 @@
 import React, { useMemo } from 'react'
 import { labelOf } from './games/roulette'
 
-type Phase = 'bet' | 'spin' | 'show'
+type Phase = 'bet' | 'spin' | 'clear' | 'pay' | 'show'
 type RouletteAPI = {
   phase: Phase
   bets: any[]
@@ -59,13 +59,28 @@ function useAmount(bets: any[]) {
   }
 }
 
+// ─── chip visual-state helper ─────────────────────────────────────────────────
+function chipStateClass(
+  type: string,
+  nums: number | number[] | undefined,
+  loserKeys?: Set<string>,
+  payingKey?: string | null,
+): string | undefined {
+  if (!loserKeys && !payingKey) return undefined
+  const arr = typeof nums === 'number' ? [nums] : (nums ?? [])
+  const key = `${type}:${arr.slice().sort((a, c) => a - c).join('-')}`
+  if (payingKey === key) return 'rb-chips--paying'
+  if (loserKeys?.has(key)) return 'rb-chips--losing'
+  return undefined
+}
+
 // ─── chip display ─────────────────────────────────────────────────────────────
-function ChipAmount({ amount }: { amount: number }) {
+function ChipAmount({ amount, chipClass }: { amount: number; chipClass?: string }) {
   if (amount <= 0) return null
   const rounded = Math.round(amount)
   const label = LABEL_WITH_DOLLAR ? `$${rounded}` : String(rounded)
   return (
-    <div className="rb-chips" aria-label={`${label} chip`}>
+    <div className={`rb-chips${chipClass ? ' ' + chipClass : ''}`} aria-label={`${label} chip`}>
       <div className="rb-chip">
         <span className="rb-chip-label">{label}</span>
       </div>
@@ -123,13 +138,14 @@ function removeOutside(g: RouletteAPI, amtNow: number, type: string) {
 
 // ─── number cell ─────────────────────────────────────────────────────────────
 function NumberCell({
-  n, disabled, color, amount, showDolly, onAdd, onRemove
+  n, disabled, color, amount, showDolly, chipClass, onAdd, onRemove
 }: {
   n: number
   disabled: boolean
   color: 'red' | 'black' | 'green'
   amount: number
   showDolly: boolean
+  chipClass?: string
   onAdd: () => void
   onRemove: () => void
 }) {
@@ -144,7 +160,7 @@ function NumberCell({
       onKeyDown={(e) => { if (e.key === 'Enter' && !disabled) onAdd() }}
     >
       <span className="rb-num-label">{labelOf(n)}</span>
-      <ChipAmount amount={amount} />
+      <ChipAmount amount={amount} chipClass={chipClass} />
       {showDolly && <Dolly label={labelOf(n)} />}
     </div>
   )
@@ -176,28 +192,22 @@ function Hit({
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
-//
-// Grid: same 27-column × 8-row structure as RouletteBoard.tsx
-//
-// Zero column (col 1) American layout:
-//   gridRow 1      → 0  number cell
-//   gridRows 2-4   → [0, 00] split hit zone
-//   gridRow 5      → 00 number cell  (37 internally)
-//
-// Zero hit column (col 2) American layout:
-//   gridRow 2  → [0, 2, 3]  street hit (trio-style)
-//   gridRow 3  → [0, 00, 1, 2, 3]  topline hit  ← unique American bet, 6:1
-//   gridRow 4  → [00, 1, 2] street hit (trio-style)
-
 export default function RouletteBoard00({
   g,
   winnerNumber = null,
+  loserKeys,
+  payingKey,
 }: {
   g: RouletteAPI
   winnerNumber?: number | null   // 0..37 where 37 = "00"
+  loserKeys?: Set<string>
+  payingKey?: string | null
 }) {
   const disabled = g.phase !== 'bet'
   const amt = useAmount(g.bets)
+
+  const cc = (type: string, nums?: number | number[]) =>
+    chipStateClass(type, nums, loserKeys, payingKey)
 
   const oi = (type: string, nums?: number | number[]) =>
     () => addInside(g, type, nums)
@@ -215,12 +225,13 @@ export default function RouletteBoard00({
     <div className="rb-board">
       <div className="rb-htable">
 
-        {/* ── ZERO (col 1, row 1 only — top-aligned) ──────────────────────── */}
+        {/* ── ZERO (col 1, row 1 only) ─────────────────────────────────────── */}
         <div style={{ gridColumn: 1, gridRow: 1, position: 'relative' }}
              className="rb-zero-cell rb-zero-top">
           <NumberCell
             n={0} disabled={disabled} color="green"
             amount={amt('straight', 0)} showDolly={winnerNumber === 0}
+            chipClass={cc('straight', 0)}
             onAdd={oi('straight', 0)}
             onRemove={() => removeInside(g, amt('straight', 0), 'straight', 0)}
           />
@@ -229,35 +240,33 @@ export default function RouletteBoard00({
         {/* ── [0, 00] SPLIT HIT (col 1, rows 2-4) ─────────────────────────── */}
         <Hit cls="vsplit rb-zero-split" gc={1} gr={'2 / 5'}
           onClick={oi('split', [0, NN])} onCtx={ri('split', [0, NN])}>
-          <ChipAmount amount={amt('split', [0, NN])} />
+          <ChipAmount amount={amt('split', [0, NN])} chipClass={cc('split', [0, NN])} />
         </Hit>
 
-        {/* ── DOUBLE ZERO (col 1, row 5 — bottom-aligned) ─────────────────── */}
+        {/* ── DOUBLE ZERO (col 1, row 5) ───────────────────────────────────── */}
         <div style={{ gridColumn: 1, gridRow: 5, position: 'relative' }}
              className="rb-zero-cell rb-zero-bot">
           <NumberCell
             n={NN} disabled={disabled} color="green"
             amount={amt('straight', NN)} showDolly={winnerNumber === NN}
+            chipClass={cc('straight', NN)}
             onAdd={oi('straight', NN)}
             onRemove={() => removeInside(g, amt('straight', NN), 'straight', NN)}
           />
         </div>
 
         {/* ── ZERO-SIDE HIT COLUMN (col 2) ─────────────────────────────────── */}
-        {/* [0, 2, 3] street — connects 0 (top) to first-col top numbers */}
         <Hit cls="street" gc={2} gr={2}
           onClick={oi('street', [0, 2, 3])} onCtx={ri('street', [0, 2, 3])}>
-          <ChipAmount amount={amt('street', [0, 2, 3])} />
+          <ChipAmount amount={amt('street', [0, 2, 3])} chipClass={cc('street', [0, 2, 3])} />
         </Hit>
-        {/* Topline [0, 00, 1, 2, 3] — the iconic American 5-number bet, 6:1 */}
         <Hit cls="first4 rb-topline" gc={2} gr={3}
           onClick={oi('topline', [0, NN, 1, 2, 3])} onCtx={ri('topline', [0, NN, 1, 2, 3])}>
-          <ChipAmount amount={amt('topline', [0, NN, 1, 2, 3])} />
+          <ChipAmount amount={amt('topline', [0, NN, 1, 2, 3])} chipClass={cc('topline', [0, NN, 1, 2, 3])} />
         </Hit>
-        {/* [00, 1, 2] street — connects 00 (bottom) to first-col bottom numbers */}
         <Hit cls="street" gc={2} gr={4}
           onClick={oi('street', [NN, 1, 2])} onCtx={ri('street', [NN, 1, 2])}>
-          <ChipAmount amount={amt('street', [NN, 1, 2])} />
+          <ChipAmount amount={amt('street', [NN, 1, 2])} chipClass={cc('street', [NN, 1, 2])} />
         </Hit>
 
         {/* ── 12 NUMBER COLUMNS (identical to single-zero board) ───────────── */}
@@ -275,18 +284,21 @@ export default function RouletteBoard00({
               <div style={{ gridColumn: gc, gridRow: 1 }}>
                 <NumberCell n={n3} disabled={disabled} color={colorOf(n3)}
                   amount={amt('straight', n3)} showDolly={winnerNumber === n3}
+                  chipClass={cc('straight', n3)}
                   onAdd={oi('straight', n3)}
                   onRemove={() => removeInside(g, amt('straight', n3), 'straight', n3)} />
               </div>
               <div style={{ gridColumn: gc, gridRow: 3 }}>
                 <NumberCell n={n2} disabled={disabled} color={colorOf(n2)}
                   amount={amt('straight', n2)} showDolly={winnerNumber === n2}
+                  chipClass={cc('straight', n2)}
                   onAdd={oi('straight', n2)}
                   onRemove={() => removeInside(g, amt('straight', n2), 'straight', n2)} />
               </div>
               <div style={{ gridColumn: gc, gridRow: 5 }}>
                 <NumberCell n={n1} disabled={disabled} color={colorOf(n1)}
                   amount={amt('straight', n1)} showDolly={winnerNumber === n1}
+                  chipClass={cc('straight', n1)}
                   onAdd={oi('straight', n1)}
                   onRemove={() => removeInside(g, amt('straight', n1), 'straight', n1)} />
               </div>
@@ -294,17 +306,17 @@ export default function RouletteBoard00({
               {/* Horizontal splits */}
               <Hit cls="hsplit" gc={gc} gr={2}
                 onClick={oi('split', [n2, n3])} onCtx={ri('split', [n2, n3])}>
-                <ChipAmount amount={amt('split', [n2, n3])} />
+                <ChipAmount amount={amt('split', [n2, n3])} chipClass={cc('split', [n2, n3])} />
               </Hit>
               <Hit cls="hsplit" gc={gc} gr={4}
                 onClick={oi('split', [n1, n2])} onCtx={ri('split', [n1, n2])}>
-                <ChipAmount amount={amt('split', [n1, n2])} />
+                <ChipAmount amount={amt('split', [n1, n2])} chipClass={cc('split', [n1, n2])} />
               </Hit>
 
               {/* Street */}
               <Hit cls="street" gc={gc} gr={6}
                 onClick={oi('street', [n1, n2, n3])} onCtx={ri('street', [n1, n2, n3])}>
-                <ChipAmount amount={amt('street', [n1, n2, n3])} />
+                <ChipAmount amount={amt('street', [n1, n2, n3])} chipClass={cc('street', [n1, n2, n3])} />
               </Hit>
 
               {/* Between-column hits */}
@@ -312,30 +324,30 @@ export default function RouletteBoard00({
                 <>
                   <Hit cls="vsplit" gc={hc} gr={1}
                     onClick={oi('split', [n3, n3+3])} onCtx={ri('split', [n3, n3+3])}>
-                    <ChipAmount amount={amt('split', [n3, n3+3])} />
+                    <ChipAmount amount={amt('split', [n3, n3+3])} chipClass={cc('split', [n3, n3+3])} />
                   </Hit>
                   <Hit cls="vsplit" gc={hc} gr={3}
                     onClick={oi('split', [n2, n2+3])} onCtx={ri('split', [n2, n2+3])}>
-                    <ChipAmount amount={amt('split', [n2, n2+3])} />
+                    <ChipAmount amount={amt('split', [n2, n2+3])} chipClass={cc('split', [n2, n2+3])} />
                   </Hit>
                   <Hit cls="vsplit" gc={hc} gr={5}
                     onClick={oi('split', [n1, n1+3])} onCtx={ri('split', [n1, n1+3])}>
-                    <ChipAmount amount={amt('split', [n1, n1+3])} />
+                    <ChipAmount amount={amt('split', [n1, n1+3])} chipClass={cc('split', [n1, n1+3])} />
                   </Hit>
                   <Hit cls="corner" gc={hc} gr={2}
                     onClick={oi('corner', [n2, n3, n2+3, n3+3])}
                     onCtx={ri('corner', [n2, n3, n2+3, n3+3])}>
-                    <ChipAmount amount={amt('corner', [n2, n3, n2+3, n3+3])} />
+                    <ChipAmount amount={amt('corner', [n2, n3, n2+3, n3+3])} chipClass={cc('corner', [n2, n3, n2+3, n3+3])} />
                   </Hit>
                   <Hit cls="corner" gc={hc} gr={4}
                     onClick={oi('corner', [n1, n2, n1+3, n2+3])}
                     onCtx={ri('corner', [n1, n2, n1+3, n2+3])}>
-                    <ChipAmount amount={amt('corner', [n1, n2, n1+3, n2+3])} />
+                    <ChipAmount amount={amt('corner', [n1, n2, n1+3, n2+3])} chipClass={cc('corner', [n1, n2, n1+3, n2+3])} />
                   </Hit>
                   <Hit cls="line" gc={hc} gr={6}
                     onClick={oi('line', [n1, n2, n3, n1+3, n2+3, n3+3])}
                     onCtx={ri('line', [n1, n2, n3, n1+3, n2+3, n3+3])}>
-                    <ChipAmount amount={amt('line', [n1, n2, n3, n1+3, n2+3, n3+3])} />
+                    <ChipAmount amount={amt('line', [n1, n2, n3, n1+3, n2+3, n3+3])} chipClass={cc('line', [n1, n2, n3, n1+3, n2+3, n3+3])} />
                   </Hit>
                 </>
               )}
@@ -347,66 +359,66 @@ export default function RouletteBoard00({
         <div className="rb-col21" style={{ gridColumn: 27, gridRow: 1 }}
           onClick={oo('column3')} onContextMenu={ro('column3')}>
           <span className="rb-label">2:1</span>
-          <ChipAmount amount={amt('column3')} />
+          <ChipAmount amount={amt('column3')} chipClass={cc('column3')} />
         </div>
         <div className="rb-col21" style={{ gridColumn: 27, gridRow: 3 }}
           onClick={oo('column2')} onContextMenu={ro('column2')}>
           <span className="rb-label">2:1</span>
-          <ChipAmount amount={amt('column2')} />
+          <ChipAmount amount={amt('column2')} chipClass={cc('column2')} />
         </div>
         <div className="rb-col21" style={{ gridColumn: 27, gridRow: 5 }}
           onClick={oo('column1')} onContextMenu={ro('column1')}>
           <span className="rb-label">2:1</span>
-          <ChipAmount amount={amt('column1')} />
+          <ChipAmount amount={amt('column1')} chipClass={cc('column1')} />
         </div>
 
         {/* ── DOZENS (row 7) ───────────────────────────────────────────────── */}
         <div className="rb-outside dozen" style={{ gridColumn: '3 / 11', gridRow: 7 }}
           onClick={oo('dozen1')} onContextMenu={ro('dozen1')}>
           <span className="rb-label">1st 12</span>
-          <ChipAmount amount={amt('dozen1')} />
+          <ChipAmount amount={amt('dozen1')} chipClass={cc('dozen1')} />
         </div>
         <div className="rb-outside dozen" style={{ gridColumn: '11 / 19', gridRow: 7 }}
           onClick={oo('dozen2')} onContextMenu={ro('dozen2')}>
           <span className="rb-label">2nd 12</span>
-          <ChipAmount amount={amt('dozen2')} />
+          <ChipAmount amount={amt('dozen2')} chipClass={cc('dozen2')} />
         </div>
         <div className="rb-outside dozen" style={{ gridColumn: '19 / 27', gridRow: 7 }}
           onClick={oo('dozen3')} onContextMenu={ro('dozen3')}>
           <span className="rb-label">3rd 12</span>
-          <ChipAmount amount={amt('dozen3')} />
+          <ChipAmount amount={amt('dozen3')} chipClass={cc('dozen3')} />
         </div>
 
         {/* ── EVEN-MONEY BETS (row 8) ─────────────────────────────────────── */}
         <div className="rb-outside even-money" style={{ gridColumn: '3 / 7', gridRow: 8 }}
           onClick={oo('low')} onContextMenu={ro('low')}>
           <span className="rb-label">1–18</span>
-          <ChipAmount amount={amt('low')} />
+          <ChipAmount amount={amt('low')} chipClass={cc('low')} />
         </div>
         <div className="rb-outside even-money" style={{ gridColumn: '7 / 11', gridRow: 8 }}
           onClick={oo('even')} onContextMenu={ro('even')}>
           <span className="rb-label">EVEN</span>
-          <ChipAmount amount={amt('even')} />
+          <ChipAmount amount={amt('even')} chipClass={cc('even')} />
         </div>
         <div className="rb-outside even-money red" style={{ gridColumn: '11 / 15', gridRow: 8 }}
           onClick={oo('red')} onContextMenu={ro('red')}>
           <span className="rb-label">RED ♦</span>
-          <ChipAmount amount={amt('red')} />
+          <ChipAmount amount={amt('red')} chipClass={cc('red')} />
         </div>
         <div className="rb-outside even-money black" style={{ gridColumn: '15 / 19', gridRow: 8 }}
           onClick={oo('black')} onContextMenu={ro('black')}>
           <span className="rb-label">BLK ♠</span>
-          <ChipAmount amount={amt('black')} />
+          <ChipAmount amount={amt('black')} chipClass={cc('black')} />
         </div>
         <div className="rb-outside even-money" style={{ gridColumn: '19 / 23', gridRow: 8 }}
           onClick={oo('odd')} onContextMenu={ro('odd')}>
           <span className="rb-label">ODD</span>
-          <ChipAmount amount={amt('odd')} />
+          <ChipAmount amount={amt('odd')} chipClass={cc('odd')} />
         </div>
         <div className="rb-outside even-money" style={{ gridColumn: '23 / 27', gridRow: 8 }}
           onClick={oo('high')} onContextMenu={ro('high')}>
           <span className="rb-label">19–36</span>
-          <ChipAmount amount={amt('high')} />
+          <ChipAmount amount={amt('high')} chipClass={cc('high')} />
         </div>
 
       </div>

@@ -8,8 +8,30 @@ import { audio } from './audio'
 const CHIP_VALUE = 2
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2))
 
+// Human-readable label for a bet key ("type:nums")
+function betLabel(key: string): string {
+  const [type, nums] = key.split(':')
+  const labels: Record<string, string> = {
+    straight: 'Straight', split: 'Split', street: 'Street',
+    corner: 'Corner', line: 'Line',
+    red: 'Red', black: 'Black', even: 'Even', odd: 'Odd',
+    low: '1–18', high: '19–36',
+    dozen1: '1st 12', dozen2: '2nd 12', dozen3: '3rd 12',
+    column1: 'Column 1', column2: 'Column 2', column3: 'Column 3',
+    trio012: 'Trio 0-1-2', trio023: 'Trio 0-2-3',
+    first4: 'First Four', topline: 'Top Line',
+  }
+  let label = labels[type] ?? type
+  if (nums) label += ` (${nums.replace(/-/g, ', ')})`
+  return label
+}
+
 export default function RouletteScreen({ onBack }: { onBack?: () => void }) {
   const g = useRoulette()
+
+  const currentPayout = g.payoutIdx >= 0 && g.payoutIdx < g.payoutList.length
+    ? g.payoutList[g.payoutIdx]
+    : null
 
   return (
     <div style={{ width: '100%', maxWidth: 1100, margin: '0 auto' }}>
@@ -44,7 +66,7 @@ export default function RouletteScreen({ onBack }: { onBack?: () => void }) {
             </div>
 
             {/* Outcome badge — shown after spin completes */}
-            {g.phase !== 'bet' && g.outcome && (
+            {g.phase !== 'bet' && g.phase !== 'spin' && g.outcome && (
               <div style={{
                 marginTop: 14,
                 display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -88,6 +110,18 @@ export default function RouletteScreen({ onBack }: { onBack?: () => void }) {
 
         </div>
 
+        {/* ── Payout status banner ── */}
+        {(g.phase === 'clear' || g.phase === 'pay') && (
+          <div className="rb-payout-banner">
+            {g.phase === 'clear'
+              ? '🎡  Clearing losing bets…'
+              : currentPayout
+                ? `💰  Paying: ${betLabel(currentPayout.key)} — $${currentPayout.payout}`
+                : '💰  Paying winners…'
+            }
+          </div>
+        )}
+
         {/* ── Board (full width below) ── */}
         <div className="rb-board-wrap">
           <RouletteBoard
@@ -119,7 +153,9 @@ export default function RouletteScreen({ onBack }: { onBack?: () => void }) {
                 }
               },
             }}
-            winnerNumber={g.phase === 'show' ? g.outcome?.number ?? null : null}
+            winnerNumber={g.phase !== 'bet' && g.phase !== 'spin' ? g.outcome?.number ?? null : null}
+            loserKeys={g.loserKeys}
+            payingKey={g.payingKey}
           />
         </div>
 
@@ -136,7 +172,12 @@ export default function RouletteScreen({ onBack }: { onBack?: () => void }) {
             >
               Spin
             </button>
-            <button onClick={g.newRound} disabled={g.phase !== 'show'}>New Round</button>
+            <button
+              onClick={g.newRound}
+              disabled={g.phase === 'bet' || g.phase === 'spin'}
+            >
+              {g.phase === 'clear' || g.phase === 'pay' ? 'Skip →' : 'New Round'}
+            </button>
             <button onClick={g.clearBets} disabled={g.phase !== 'bet' || g.bets.length === 0}>
               Clear Bets
             </button>
