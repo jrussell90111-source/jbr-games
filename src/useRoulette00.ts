@@ -92,11 +92,13 @@ export function useRoulette00() {
     setSpinMs(durationMs)
 
     // American wheel — 38 pockets
+    // Set outcome immediately so the wheel component gets targetNumber
+    // and can start its CSS transition animation right away.
     const o = spinWheel38()
+    setOutcome(o)
 
     if (spinTimerRef.current !== null) clearTimeout(spinTimerRef.current)
     spinTimerRef.current = window.setTimeout(() => {
-      setOutcome(o)
       const { returned, net, stake } = settleAll(bets, o)
       if (returned > 0) syncCredits(+(readNum(CREDITS_KEY, 0) + returned).toFixed(2))
       setLastNet(+net.toFixed(2))

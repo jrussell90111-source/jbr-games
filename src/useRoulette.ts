@@ -108,13 +108,14 @@ export function useRoulette() {
     stopSpinAudioRef.current = stop
     setSpinMs(durationMs)
 
-    // Decide the outcome now (keep hidden until reveal)
+    // Decide the outcome now and set it immediately so the wheel
+    // component knows its target number and can start animating.
     const o = spinWheel()
+    setOutcome(o)
 
-    // Schedule reveal exactly at clip end
+    // Schedule settlement + reveal exactly at clip end
     if (spinTimerRef.current !== null) clearTimeout(spinTimerRef.current)
     spinTimerRef.current = window.setTimeout(() => {
-      setOutcome(o)
       const { returned, net, stake } = settleAll(bets, o) // expect stake in return shape
       if (returned > 0) syncCredits(+(readNum(CREDITS_KEY, 0) + returned).toFixed(2))
       setLastNet(+net.toFixed(2))
