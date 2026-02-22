@@ -6,10 +6,10 @@ import { audio } from './audio'
 const ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26]
 const SLICE = 360 / ORDER.length
 
-// Ball orbit radii (px). Wheel is 160px wide so center = 80px.
-// Outer: near the fret ring. Inner: settled in pocket area.
-const BALL_OUTER_R = 68
-const BALL_INNER_R = 48
+// Ball orbit radii (px). Wheel is 220px wide so center = 110px.
+// Outer: just inside the gold fret ring. Inner: settled in pocket band.
+const BALL_OUTER_R = 95
+const BALL_INNER_R = 78
 
 function colorHex(n: number) {
   const c = colorOf(n)

@@ -14,9 +14,10 @@ const ORDER = [
 ]
 const SLICE = 360 / ORDER.length  // ≈ 9.47°
 
-// Ball orbit radii (px). Wheel is 160px wide so center = 80px.
-const BALL_OUTER_R = 68
-const BALL_INNER_R = 48
+// Ball orbit radii (px). Wheel is 220px wide so center = 110px.
+// Outer: just inside the gold fret ring. Inner: settled in pocket band.
+const BALL_OUTER_R = 95
+const BALL_INNER_R = 78
 
 function colorHex(n: number): string {
   const c = colorOf(n)
