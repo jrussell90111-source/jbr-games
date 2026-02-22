@@ -5,19 +5,18 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { colorOf } from './games/roulette'
 import { audio } from './audio'
 
-// Authentic American wheel order (clockwise from 0).
-// 37 = "00"
+// Authentic American wheel order (clockwise from 0). 37 = "00".
 const ORDER = [
   0, 28, 9, 26, 30, 11, 7, 20, 32, 17, 5, 22, 34, 15, 3,
   24, 36, 13, 1, 37, 27, 10, 25, 29, 12, 8, 19, 31, 18,
   6, 21, 33, 16, 4, 23, 35, 14, 2
 ]
-const SLICE = 360 / ORDER.length  // ≈ 9.47°
+const SLICE = 360 / ORDER.length   // ≈ 9.47° per pocket (38 pockets)
 
-// Ball orbit radii (px). Wheel is 220px wide so center = 110px.
-// Outer: just inside the gold fret ring. Inner: settled in pocket band.
-const BALL_OUTER_R = 95
-const BALL_INNER_R = 78
+// Wheel is 300px; center = 150px.
+const BALL_OUTER_R = 130
+const BALL_INNER_R = 106
+const NUM_R        = 115
 
 function colorHex(n: number): string {
   const c = colorOf(n)
@@ -33,6 +32,11 @@ function buildGradient(): string {
     a = next
   }
   return `conic-gradient(${stops.join(',')})`
+}
+
+/** Display label: 37 (internal) → "00", everything else → its number */
+function pocketLabel(n: number): string {
+  return n === 37 ? '00' : String(n)
 }
 
 export default function RouletteWheel00({
@@ -57,7 +61,7 @@ export default function RouletteWheel00({
     // ── Wheel rotation ──────────────────────────────────────────────────
     const idx = ORDER.indexOf(targetNumber)
     if (idx === -1) return
-    turnsRef.current += 8 + Math.floor(Math.random() * 4)  // 8–11 full rotations
+    turnsRef.current += 8 + Math.floor(Math.random() * 4)
     const targetCenter = (idx + 0.5) * SLICE
     const nextDeg = turnsRef.current * 360 - targetCenter
     requestAnimationFrame(() => setDeg(nextDeg))
@@ -72,14 +76,10 @@ export default function RouletteWheel00({
     }
     tick()
 
-    // ── Ball animation (rAF, no React state) ────────────────────────────
-    // Orbits counterclockwise (negative angle) with cubic ease-out.
-    // totalOrbitRad is an exact multiple of 2π → ball ends at angle 0
-    // (12 o'clock = pointer) where the winning pocket has rotated to.
-    const orbits   = 6 + Math.floor(Math.random() * 4)   // 6–9 full CCW orbits
+    // ── Ball animation ──────────────────────────────────────────────────
+    const orbits   = 6 + Math.floor(Math.random() * 4)
     const totalRad = orbits * Math.PI * 2
 
-    // Jump ball to outer rim immediately
     if (ballRef.current) {
       ballRef.current.style.transition = 'none'
       ballRef.current.style.opacity    = '1'
@@ -89,20 +89,15 @@ export default function RouletteWheel00({
     const animStart = performance.now()
     const loop = (now: number) => {
       const t      = Math.min((now - animStart) / durationMs, 1)
-      const eased  = 1 - Math.pow(1 - t, 3)              // cubic ease-out
-      const angle  = -totalRad * eased                    // CCW = negative
-
-      // Spiral inward during the final 25 % of the spin
+      const eased  = 1 - Math.pow(1 - t, 3)
+      const angle  = -totalRad * eased
       const dropT  = Math.max(0, (t - 0.75) / 0.25)
       const radius = BALL_OUTER_R - (BALL_OUTER_R - BALL_INNER_R) * dropT
 
       if (ballRef.current) {
         ballRef.current.style.transform = `rotate(${angle}rad) translateY(-${radius}px)`
       }
-
-      if (t < 1) {
-        rafRef.current = requestAnimationFrame(loop)
-      }
+      if (t < 1) rafRef.current = requestAnimationFrame(loop)
     }
     rafRef.current = requestAnimationFrame(loop)
 
@@ -122,8 +117,23 @@ export default function RouletteWheel00({
           transition: spinning ? `transform ${durationMs}ms cubic-bezier(.17,.72,.2,1)` : 'none',
         }}
       >
+        {/* Pocket numbers — rotate with the wheel */}
+        {ORDER.map((n, i) => {
+          const pocketDeg = i * SLICE + SLICE / 2
+          return (
+            <div
+              key={n}
+              className="rw-number"
+              style={{ transform: `rotate(${pocketDeg}deg) translateY(-${NUM_R}px)` }}
+            >
+              {pocketLabel(n)}
+            </div>
+          )
+        })}
+
         <div className="rw-ring" />
       </div>
+
       <div className="rw-ball" ref={ballRef} />
       <div className="rw-pointer" aria-hidden />
     </div>

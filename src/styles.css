@@ -343,47 +343,70 @@ button:disabled { opacity: .6 }
    =================================================================== */
 
 /* ------------------------ WHEEL ------------------------ */
-.rw-wrap { position: relative; width: 220px; height: 220px; flex: 0 0 220px; }
+/* 300px: large enough to fit pocket numbers (~19px arc width per pocket) */
+.rw-wrap { position: relative; width: 300px; height: 300px; flex: 0 0 300px; }
 .rw-wheel {
   width: 100%; height: 100%; border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(0,0,0,.35), inset 0 0 0 6px #1c2a20, inset 0 0 0 10px #d6c39b;
+  box-shadow: 0 4px 16px rgba(0,0,0,.5), inset 0 0 0 8px #1c2a20, inset 0 0 0 13px #d6c39b;
   position: relative;
+  overflow: hidden;   /* clip number labels to the wheel circle */
 }
 .rw-ring {
   position: absolute; inset: 20%; border-radius: 50%;
   box-shadow: inset 0 0 0 8px #1c2a20, inset 0 0 0 10px #0b0b0b;
-  background: radial-gradient(circle, rgba(0,0,0,.35), rgba(0,0,0,0) 50%);
+  background: radial-gradient(circle, rgba(0,0,0,.4), rgba(0,0,0,0) 55%);
+  z-index: 1;
+  pointer-events: none;
 }
 .rw-wheel.is-spinning { animation: rw-rotate var(--spinMs, 8000ms) cubic-bezier(.15,.8,.2,1) forwards; }
 @keyframes rw-rotate { from { transform: rotate(0deg); } to { transform: rotate(1320deg); } }
 .rw-pointer {
-  position: absolute; top: -4px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: -5px; left: 50%; transform: translateX(-50%);
   width: 0; height: 0;
-  border-left: 10px solid transparent; border-right: 10px solid transparent; border-bottom: 14px solid #fff;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,.4));
-  z-index: 3;
+  border-left: 11px solid transparent; border-right: 11px solid transparent; border-bottom: 16px solid #fff;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,.6));
+  z-index: 20;
+}
+
+/* ── Pocket numbers (inside .rw-wheel, rotate with it) ── */
+/* Each number div is centered at wheel center; rotate+translateY positions it in its pocket. */
+.rw-number {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 18px; height: 12px;
+  margin: -6px 0 0 -9px;         /* center the div at wheel center */
+  transform-origin: 9px 6px;     /* = center of div = wheel center */
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8.5px;
+  font-weight: 800;
+  font-family: Arial, sans-serif;
+  color: #fff;
+  text-shadow: 0 0 3px rgba(0,0,0,1), 0 1px 2px rgba(0,0,0,.9);
+  letter-spacing: -0.3px;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
 }
 
 /* ── Roulette ball ── */
-/* Centered at wrap's center; rAF drives rotate(angle)+translateY(-r) to orbit it. */
-/* transform-origin at the ball's own center = wrap center, so rotate() is a true orbit. */
+/* Centered at wrap's center (outside .rw-wheel). */
+/* rAF drives rotate(angle)+translateY(-r) to orbit it around the wheel. */
 .rw-ball {
   position: absolute;
-  width: 13px; height: 13px;
-  top: calc(50% - 6.5px);
-  left: calc(50% - 6.5px);
+  width: 18px; height: 18px;
+  top: calc(50% - 9px);
+  left: calc(50% - 9px);
   border-radius: 50%;
-  /* bright sphere with a strong highlight so it reads against any pocket color */
   background: radial-gradient(circle at 35% 30%, #ffffff 0%, #e8e8e8 40%, #b0b0b0 100%);
   box-shadow:
-    0 1px 5px rgba(0,0,0,.9),
-    0 0 8px rgba(255,255,255,.55),
-    inset 0 -1px 2px rgba(0,0,0,.3);
-  transform-origin: 6.5px 6.5px;
+    0 2px 6px rgba(0,0,0,.9),
+    0 0 10px rgba(255,255,255,.6),
+    inset 0 -2px 3px rgba(0,0,0,.3);
+  transform-origin: 9px 9px;
   opacity: 0;
   pointer-events: none;
   will-change: transform;
-  z-index: 10;   /* well above the wheel gradient and ring */
+  z-index: 10;
 }
 
 /* ======================== BOARD SHELL ======================== */
