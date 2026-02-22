@@ -14,6 +14,7 @@ import { BJ10_RULES, BJ15_RULES, BJ25_RULES } from './games/blackjack'
 
 //Roulette
 import RouletteScreen from './RouletteScreen'
+import RouletteScreen00 from './RouletteScreen00'
 
 
 /* ------------------------------------------------------------------ */
@@ -228,7 +229,7 @@ function PaytableAny({
 
 export default function App(){
   // Screens: menu + poker games + blackjack tables
-  const [screen, setScreen] = useState<'menu' | 'job' | 'dw' | 'ddb' | 'bj10' | 'bj15' | 'bj25' | 'roulette'>('job')
+  const [screen, setScreen] = useState<'menu' | 'job' | 'dw' | 'ddb' | 'bj10' | 'bj15' | 'bj25' | 'roulette' | 'roulette00'>('job')
 
   // Poker specs
   const isPoker = (screen === 'job' || screen === 'dw' || screen === 'ddb')
@@ -540,14 +541,24 @@ export default function App(){
               <div className="gameTileSub">8/5 paytable</div>
             </button>
 
-	    {/* Roulette */}
+            {/* Roulette (European) */}
             <button
               type="button"
               className="gameTile"
               onClick={() => { audio.clickHi(); setScreen('roulette') }}
             >
               <div className="gameTileTitle">Roulette</div>
-              <div className="gameTileSub">Single zero · $2 chips</div>
+              <div className="gameTileSub">European · Single zero · $2 chips</div>
+            </button>
+
+            {/* Roulette (American) */}
+            <button
+              type="button"
+              className="gameTile"
+              onClick={() => { audio.clickHi(); setScreen('roulette00') }}
+            >
+              <div className="gameTileTitle">Roulette — Double Zero</div>
+              <div className="gameTileSub">American · 38 pockets · $2 chips</div>
             </button>
 
             {/* Deuces Wild */}
@@ -753,6 +764,7 @@ export default function App(){
 
       {/* ========== Roulette SCREENS ========== */}
       {screen === 'roulette' && <RouletteScreen />}
+      {screen === 'roulette00' && <RouletteScreen00 onBack={() => setScreen('menu')} />}
 
       {/* ========= SETTINGS MODAL (Poker only) ========= */}
       {settingsOpen && (
