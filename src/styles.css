@@ -46,9 +46,9 @@ body {
   margin-bottom: 12px;
 }
 
-/* ========= MAIN CARDS ROW ========= */
+/* ========== MAIN CARDS ROW ========== */
 .cards {
-  display: flex;            /* avoid fractional grid columns */
+  display: flex;       /* avoid fractional grid columns */
   gap: 12px;
   margin-top: 8px;
   align-items: center;
@@ -57,29 +57,29 @@ body {
 
 /* Each main card is a fixed-size SVG container */
 .cards .card {
-  width: 90px;              /* adjust as desired */
+  width: 90px;        /* adjust as desired */
   height: 130px;
   border-radius: 10px;
   background: #fff;
   position: relative;
   user-select: none;
   touch-action: manipulation;
-  overflow: hidden;         /* clip any stray SVG edges */
+  overflow: hidden;   /* clip any stray SVG edges */
   box-sizing: border-box;
   box-shadow: 0 2px 8px rgba(0,0,0,0.22);
-  contain: content;         /* isolates paint/layout for smoother animations */
+  contain: content;   /* isolates paint/layout for smoother animations */
 }
 
 /* Crisp SVGs in cards: remove baseline gap and fill box */
 .cards .card img {
-  display: block;           /* kills inline baseline sliver */
+  display: block;       /* kills inline baseline sliver */
   width: 100%;
   height: 100%;
   object-fit: contain;
   pointer-events: none;
 }
 
-/* HOLD badge — bottom-right with scale/opacity animation (Safari-safe) */
+/* HOLD badge – bottom-right with scale/opacity animation (Safari-safe) */
 .holdTag{
   position: absolute;
   right: 6px;
@@ -103,7 +103,7 @@ body {
   opacity: 1;
 }
 
-/* ========= CONTROLS ========= */
+/* ========== CONTROLS ========== */
 .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 
 button {
@@ -128,7 +128,7 @@ button:disabled { opacity: .6 }
   cursor: not-allowed;
 }
 
-/* Grey pulse when Bet One wraps 5 → 1 */
+/* Grey pulse when Bet One wraps 5 ➜ 1 */
 .betOneBtn.is-pulsing {
   animation: betOnePulse 240ms ease-out;
 }
@@ -138,7 +138,7 @@ button:disabled { opacity: .6 }
   100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.00); background:#1a285c; transform: translateZ(0) scale(1); }
 }
 
-/* ========= PAYTABLE ========= */
+/* ========== PAYTABLE ========== */
 .paytable {
   margin-top: 12px;
   width: 100%;
@@ -175,7 +175,7 @@ button:disabled { opacity: .6 }
   background: rgba(255,255,255,.05);
 }
 
-/* ========= LAYOUT ========= */
+/* ========== LAYOUT ========== */
 .layout {
   display: grid;
   grid-template-columns: 1fr minmax(260px, 320px);
@@ -188,7 +188,7 @@ button:disabled { opacity: .6 }
 }
 
 .panel {
-  background: linear-gradient(180deg, #16224a, #0f1a3b);
+  background: linear-gradient(180deg, #162240, #0f1a3b);
   border: 2px solid #1f2a5a;
   border-radius: 14px;
   padding: 12px;
@@ -198,7 +198,7 @@ button:disabled { opacity: .6 }
 .panel .row { margin-bottom: 6px; }
 .panel small { opacity: .7; }
 
-/* ========= COACHING MODAL ========= */
+/* ========== COACHING MODAL ========== */
 .modal {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.55);
@@ -221,21 +221,21 @@ button:disabled { opacity: .6 }
   margin: 10px 0;
 }
 
-/* Hint cards: fixed size; ~2:3 ratio */
+/* Hint cards: fixed size; ~~2:3 ratio */
 .modal .hintCard {
   width: var(--hint-w);
   height: calc(var(--hint-w) * 1.5);
   border-radius: 10px;
   background: #fff;
   position: relative;
-  overflow: hidden;        /* clip any stray SVG edges */
+  overflow: hidden;   /* clip any stray SVG edges */
   display:flex; align-items:center; justify-content:center;
   box-sizing: border-box;
 }
 
 /* Ensure the SVG never exceeds the box */
 .modal .hintCard img {
-  display: block;          /* removes inline baseline gap */
+  display: block;     /* removes inline baseline gap */
   width: 100% !important;
   height: 100% !important;
   object-fit: contain;
@@ -257,7 +257,7 @@ button:disabled { opacity: .6 }
 /* Simple progress bar already styled inline, but you can theme it here if you like */
 .progressBar { backdrop-filter: saturate(120%); }
 
-/* ======= GAME MENU ======= */
+/* ========== GAME MENU ========== */
 .menuScreen {
   width: 100%;
   max-width: 900px;
@@ -297,7 +297,7 @@ button:disabled { opacity: .6 }
   cursor: not-allowed;
   position: relative;
 }
-.gameTileTitle { font-size: 1.1rem; }
+.gameTileTile { font-size: 1.1rem; }
 .gameTileSub { font-size: .95rem; color: var(--muted); }
 
 .comingBadge {
@@ -329,8 +329,8 @@ button:disabled { opacity: .6 }
 
 /* Make key action buttons slightly larger */
 .primaryAction {
-  font-size: 1.1em;        /* ~10% bump */
-  padding: 0.7em 1.1em;    /* a bit more tap target */
+  font-size: 1.1em;    /* ~10% bump */
+  padding: 0.7em 1.1em; /* a bit more tap target */
 }
 
 /* Optional: keep the pulse effect working on the bigger Bet One button */
@@ -338,18 +338,18 @@ button:disabled { opacity: .6 }
   transform: scale(1.04);
   transition: transform 120ms ease;
 }
-/* ===================================================================
-   ROULETTE — horizontal casino-style felt board
-   =================================================================== */
+/* ========================================================
+   ROULETTE – horizontal casino-style felt board
+   ======================================================== */
 
-/* ------------------------ WHEEL ------------------------ */
-/* 300px: large enough to fit pocket numbers (~19px arc width per pocket) */
+/* --- Wheel --- */
+/* 300px: large enough to fit pocket numbers (​​​~19px arc width per pocket) */
 .rw-wrap { position: relative; width: 300px; height: 300px; flex: 0 0 300px; }
 .rw-wheel {
   width: 100%; height: 100%; border-radius: 50%;
   box-shadow: 0 4px 16px rgba(0,0,0,.5), inset 0 0 0 8px #1c2a20, inset 0 0 0 13px #d6c39b;
   position: relative;
-  overflow: hidden;   /* clip number labels to the wheel circle */
+  overflow: hidden;    /* clip number labels to the wheel circle */
 }
 .rw-ring {
   position: absolute; inset: 20%; border-radius: 50%;
@@ -368,14 +368,14 @@ button:disabled { opacity: .6 }
   z-index: 20;
 }
 
-/* ── Pocket numbers (inside .rw-wheel, rotate with it) ── */
-/* Each number div is centered at wheel center; rotate+translateY positions it in its pocket. */
+/*  Pocket numbers (inside .rw-wheel, rotate with it)  */
+/*  Each number div is centered at wheel center; rotate+translateY positions it in its pocket.  */
 .rw-number {
   position: absolute;
   top: 50%; left: 50%;
   width: 18px; height: 12px;
-  margin: -6px 0 0 -9px;         /* center the div at wheel center */
-  transform-origin: 9px 6px;     /* = center of div = wheel center */
+  margin: -6px 0 0 -9px;    /* center the div at wheel center */
+  transform-origin: 9px 6px; /* = center of div = wheel center */
   display: flex; align-items: center; justify-content: center;
   font-size: 8.5px;
   font-weight: 800;
@@ -388,9 +388,9 @@ button:disabled { opacity: .6 }
   z-index: 0;
 }
 
-/* ── Roulette ball ── */
-/* Centered at wrap's center (outside .rw-wheel). */
-/* rAF drives rotate(angle)+translateY(-r) to orbit it around the wheel. */
+/*  ​Ball   */
+/*  Centered at wrap's center (outside .rw-wheel). */
+/*  rAF drives rotate(angle)+translateY(-r) to orbit it around the wheel.  */
 .rw-ball {
   position: absolute;
   width: 18px; height: 18px;
@@ -409,13 +409,9 @@ button:disabled { opacity: .6 }
   z-index: 10;
 }
 
-/* ======================== BOARD SHELL ======================== */
-.rb-board { display: flex; flex-direction: column; gap: 10px; user-select: none; }
-.rb-board-wrap { width: 100%; overflow-x: auto; padding-bottom: 4px; }
-
-/* ======================== HORIZONTAL TABLE GRID ========================
-   27 columns × 8 rows — see RouletteBoard.tsx header comment for full spec
-   ====================================================================== */
+/* ========== HORIZONTAL TABLE GRID =====
+   27 columns × 8 rows – see RouletteBoard.tsx header comment for full spec
+   ============================================ */
 .rb-htable {
   display: grid;
   grid-template-columns: 56px 12px repeat(12, 1fr 12px) 52px;
@@ -432,7 +428,7 @@ button:disabled { opacity: .6 }
   isolation: isolate;
 }
 
-/* ======================== NUMBER CELLS ======================== */
+/* ========== NUMBER CELLS ========== */
 .rb-cell.num {
   position: relative;
   display: grid;
@@ -469,7 +465,7 @@ button:disabled { opacity: .6 }
 }
 .rb-zero-cell .rb-num-label { font-size: clamp(12px, 1.8vw, 20px); }
 
-/* ======================== INSIDE HIT ZONES ======================== */
+/* ========== INSIDE HIT ZONES ========== */
 .rb-hit {
   position: relative;
   z-index: 20;
@@ -483,7 +479,7 @@ button:disabled { opacity: .6 }
 /* Visual indicator dots / bars */
 .rb-hit.hsplit::after,
 .rb-hit.vsplit::after {
-  content: ‘’;
+  content: '​​';
   display: block;
   width: 7px; height: 7px;
   border-radius: 50%;
@@ -491,10 +487,8 @@ button:disabled { opacity: .6 }
   border: 1px solid rgba(255,255,255,0.9);
   pointer-events: none;
 }
-.rb-hit.corner::after,
-.rb-hit.trio::after,
-.rb-hit.first4::after {
-  content: ‘’;
+.rb-hit.corner::after, .rb-hit.trio::after, .rb-hit.first4::after {
+  content: '​​';
   display: block;
   width: 7px; height: 7px;
   border-radius: 50%;
@@ -503,7 +497,7 @@ button:disabled { opacity: .6 }
   pointer-events: none;
 }
 .rb-hit.street::after {
-  content: ‘’;
+  content: '​​';
   display: block;
   width: 5px; height: 16px;
   border-radius: 3px;
@@ -512,7 +506,7 @@ button:disabled { opacity: .6 }
   pointer-events: none;
 }
 .rb-hit.line::after {
-  content: ‘’;
+  content: '​​';
   display: block;
   width: 5px; height: 8px;
   border-radius: 2px;
@@ -521,7 +515,7 @@ button:disabled { opacity: .6 }
   pointer-events: none;
 }
 
-/* ======================== CHIPS & DOLLY ======================== */
+/* ========== CHIPS & DOLLY ========== */
 .rb-chips {
   position: absolute;
   left: 50%; top: 50%;
@@ -562,7 +556,7 @@ button:disabled { opacity: .6 }
   z-index: 400;
 }
 
-/* ── Payout sequence chip states ── */
+/*  Payout sequence chip states  */
 .rb-chips--losing {
   opacity: 0.15;
   transform: translate(-50%, -50%) scale(0.6);
@@ -584,7 +578,7 @@ button:disabled { opacity: .6 }
   }
 }
 
-/* ── Payout status banner ── */
+/*  Payout status banner  */
 .rb-payout-banner {
   text-align: center;
   padding: 9px 16px;
@@ -603,7 +597,7 @@ button:disabled { opacity: .6 }
   to   { opacity: 1; }
 }
 
-/* ======================== 2:1 COLUMN BETS ======================== */
+/* ========== 2:1 COLUMN BETS ========== */
 .rb-col21 {
   position: relative;
   display: grid; place-items: center;
@@ -620,7 +614,7 @@ button:disabled { opacity: .6 }
   user-select: none; letter-spacing: .3px;
 }
 
-/* ======================== DOZENS & EVEN-MONEY ======================== */
+/* ========== DOZENS & EVEN-MONEY ========== */
 .rb-outside {
   position: relative;
   display: grid; place-items: center;
@@ -639,7 +633,7 @@ button:disabled { opacity: .6 }
   user-select: none; letter-spacing: .4px;
 }
 
-/* ======================== AMERICAN DOUBLE-ZERO EXTRAS ======================== */
+/* ========== AMERICAN DOUBLE-ZERO EXTRAS ========== */
 /* The zero column is split into 0 (top) and 00 (bottom) cells */
 .rb-zero-top, .rb-zero-bot {
   border-right: 2px solid rgba(255,255,255,0.7);
@@ -653,7 +647,7 @@ button:disabled { opacity: .6 }
   border-right: 2px solid rgba(255,255,255,0.7);
 }
 .rb-zero-split::after {
-  content: '';
+  content: '​​';
   display: block;
   width: 7px; height: 7px;
   border-radius: 50%;
@@ -662,32 +656,172 @@ button:disabled { opacity: .6 }
   pointer-events: none;
 }
 
-/* Topline bet — highlight it subtly so players notice it */
+/* Topline bet – highlight it subtly so players notice it */
 .rb-topline {
   background: rgba(180, 130, 0, 0.18);
 }
-.rb-topline::after {
-  content: '';
+.rb-topline:hover { background: rgba(180, 130, 0, 0.35) !important; }
+
+/* ========== OUTSIDE COLUMN BETS ========== */
+/* The zero column is split into 0 (top) and 00 (bottom) cells */
+.rb-zero-top,  .rb-zero-bot {
+  border-right: 2px solid rgba(255,255,255,0.7);
+}
+.rb-zero-top { border-bottom: 1px solid rgba(255,255,255,0.35); }
+.rb-zero-bot { border-top: 1px solid rgba(255,255,255,0.35); }
+
+/* [0,00] split hit zone between the two green cells */
+.rb-zero-split {
+  background: rgba(15, 123, 58, 0.5);
+  border-right: 2px solid rgba(255,255,255,0.7);
+}
+.rb-zero-split::after {
+  content: '​​';
   display: block;
-  width: 7px; height: 18px;
-  border-radius: 3px;
-  background: rgba(255, 210, 80, 0.7);
-  border: 1px solid rgba(255, 210, 80, 0.95);
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.7);
+  border: 1px solid rgba(255,255,255,0.95);
   pointer-events: none;
+}
+
+/* Topline bet – highlight it subtly so players notice it */
+.rb-topline {
+  background: rgba(180, 130, 0, 0.18);
 }
 .rb-topline:hover { background: rgba(180, 130, 0, 0.35) !important; }
 
-/* ======================== ACTIONS BAR ======================== */
-.rb-actions {
-  position: sticky; bottom: 0;
-  display: flex; justify-content: space-between; align-items: center; gap: 10px;
-  margin-top: 10px; padding: 10px;
-  background: rgba(19,36,28,.92);
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 10px;
-  z-index: 500;
-  backdrop-filter: blur(2px);
-}
-.rb-actions .primary { font-weight: 700; }
-.rb-outcome { font-size: 14px; opacity: .95; }
+/* ======== SNAKEBITE GAME ======== */
+.sb-screen { width: 100%; max-width: 900px; }
 
+.sb-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) 280px;
+  gap: 16px;
+  width: 100%;
+}
+@media (max-width: 700px) {
+  .sb-layout { grid-template-columns: 1fr; }
+}
+
+.sb-board-col { display: flex; flex-direction: column; align-items: center; }
+.sb-control-col {
+  display: flex; flex-direction: column; gap: 12px;
+  background: linear-gradient(180deg, #14224f, var(--table));
+  border: 2px solid #1f2a5a;
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+}
+
+.sb-stats { display: flex; gap: 14px; font-size: 14px; flex-wrap: wrap; }
+.sb-stats b { color: var(--accent); }
+
+.sb-die-area { display: flex; align-items: center; gap: 14px; }
+.sb-die {
+  width: 64px; height: 64px;
+  cursor: pointer;
+  filter: drop-shadow(2px 3px 4px rgba(0,0,0,.4));
+  transition: transform 120ms ease;
+}
+.sb-die:hover { transform: scale(1.08); }
+.sb-die-rolling { animation: sbDieRoll 600ms ease-in-out; }
+@keyframes sbDieRoll {
+  0%   { transform: rotate(0deg) scale(1); }
+  50%  { transform: rotate(360deg) scale(1.15); }
+  100% { transform: rotate(720deg) scale(1); }
+}
+
+.sb-card {
+  padding: 14px;
+  border-radius: 12px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+  border: 2px solid rgba(255,255,255,.15);
+}
+.sb-card-brown { background: #8B6914; color: #fff; }
+.sb-card-red   { background: #b71c1c; color: #fff; }
+.sb-card-snakebite {
+  background: linear-gradient(135deg, #2e7d32, #1b5e20);
+  color: #ffd54f;
+  border-color: #4caf50;
+  font-size: 1.3rem;
+}
+
+.sb-timer-wrap {
+  width: 100%;
+  height: 22px;
+  background: rgba(255,255,255,.1);
+  border-radius: 11px;
+  overflow: hidden;
+  position: relative;
+}
+.sb-timer-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 11px;
+  transition: width 100ms linear;
+}
+.sb-timer-bar.urgent { background: #ef5350; }
+.sb-timer-text {
+  position: absolute;
+  inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.6);
+}
+
+.sb-answer-area { display: flex; flex-direction: column; gap: 8px; }
+.sb-answer-input {
+  font-size: 1.4rem;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 2px solid #31408a;
+  background: #1a285c;
+  color: #fff;
+  text-align: center;
+  width: 100%;
+}
+.sb-answer-input:focus { outline: none; border-color: var(--accent); }
+.sb-input-row { display: flex; gap: 8px; }
+
+.sb-feedback {
+  padding: 10px;
+  border-radius: 10px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.sb-won-modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.65);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 60;
+}
+.sb-won-modal > div {
+  background: #0f1a3b;
+  border: 2px solid #1f2a5a;
+  border-radius: 14px;
+  padding: 24px;
+  text-align: center;
+  max-width: 400px;
+  box-shadow: 0 18px 60px rgba(0,0,0,0.45);
+}
+
+/* SVG Board */
+.snakeboard { width: 100%; max-width: 460px; height: auto; }
+.snakespace { transition: fill 200ms; }
+.playermarker { transition: all 400ms ease; }
+
+/* Menu categories */
+.menuCategory { margin-bottom: 18px; }
+.menuCategoryTitle {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: .4px;
+  margin-bottom: 10px;
+  padding-left: 2px;
+}
