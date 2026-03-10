@@ -3,7 +3,6 @@
 
 import React, { useMemo } from 'react'
 import type { SnakeSpace } from './games/snakebite'
-import type { Player } from './useSnakebite'
 
 /* ------------------------------------------------------------------ */
 /*                         SPIRAL GEOMETRY                             */
@@ -192,15 +191,13 @@ const BORDER_WIDTH = 48
 
 interface SnakeBoardProps {
   spaces: SnakeSpace[]
-  players: Player[]
-  currentPlayerIndex: number
+  playerPosition: number
   highlightSpace?: number | null
 }
 
 const SnakebiteBoard = React.memo(function SnakebiteBoard({
   spaces,
-  players,
-  currentPlayerIndex,
+  playerPosition,
   highlightSpace,
 }: SnakeBoardProps) {
 
@@ -226,23 +223,8 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
     return Math.atan2(p0.y - p1.y, p0.x - p1.x) * (180 / Math.PI) - 90
   }, [positions])
 
-  // Group players by position for stacking
-  const playersByPosition = useMemo(() => {
-    const map: Record<number, Player[]> = {}
-    for (const p of players) {
-      if (!map[p.position]) map[p.position] = []
-      map[p.position].push(p)
-    }
-    return map
-  }, [players])
-
-  // Offset for stacking multiple players on same space
-  const getPlayerOffset = (idx: number, total: number): { dx: number; dy: number } => {
-    if (total <= 1) return { dx: 0, dy: 0 }
-    const angle = (idx / total) * 2 * Math.PI - Math.PI / 2
-    const dist = 28
-    return { dx: dist * Math.cos(angle), dy: dist * Math.sin(angle) }
-  }
+  // Player marker position
+  const playerMid = bandMidpoints[playerPosition]
 
   return (
     <svg
@@ -377,58 +359,42 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
         )
       })()}
 
-      {/* ============ PLAYER MARKERS ============ */}
-      {Object.entries(playersByPosition).map(([posStr, playersAtPos]) => {
-        const posIdx = parseInt(posStr, 10)
-        const mid = bandMidpoints[posIdx]
-        if (!mid) return null
-
-        return playersAtPos.map((player, stackIdx) => {
-          const offset = getPlayerOffset(stackIdx, playersAtPos.length)
-          const px = mid.x + offset.dx
-          const py = mid.y + offset.dy
-          const isCurrent = player.id === players[currentPlayerIndex]?.id
-
-          return (
-            <g key={player.id}>
-              {/* Glow for current player */}
-              {isCurrent && (
-                <circle
-                  cx={px}
-                  cy={py}
-                  r={22}
-                  fill="none"
-                  stroke={player.color}
-                  strokeWidth={3}
-                  opacity={0.8}
-                  className="playermarker"
-                />
-              )}
-              {/* Player token circle */}
-              <circle
-                cx={px}
-                cy={py}
-                r={isCurrent ? 14 : 11}
-                fill={player.color}
-                stroke="#fff"
-                strokeWidth={2}
-                opacity={isCurrent ? 1 : 0.8}
-              />
-              {/* Player emoji */}
-              <text
-                x={px}
-                y={py + 1}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fontSize={isCurrent ? 14 : 11}
-                pointerEvents="none"
-              >
-                {player.emoji}
-              </text>
-            </g>
-          )
-        })
-      })}
+      {/* ============ PLAYER MARKER ============ */}
+      {playerMid && (
+        <g>
+          {/* Glow ring */}
+          <circle
+            cx={playerMid.x}
+            cy={playerMid.y}
+            r={22}
+            fill="none"
+            stroke="#ef5350"
+            strokeWidth={3}
+            opacity={0.8}
+            className="playermarker"
+          />
+          {/* Token circle */}
+          <circle
+            cx={playerMid.x}
+            cy={playerMid.y}
+            r={14}
+            fill="#ef5350"
+            stroke="#fff"
+            strokeWidth={2}
+          />
+          {/* Token icon */}
+          <text
+            x={playerMid.x}
+            y={playerMid.y + 1}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={14}
+            pointerEvents="none"
+          >
+            &#x1F40D;
+          </text>
+        </g>
+      )}
     </svg>
   )
 })
