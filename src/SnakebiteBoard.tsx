@@ -29,7 +29,7 @@ function calculateSpiralData(count: number): { positions: Point[]; midpoints: Po
   const cx = 300
   const cy = 330   // shifted down 30px for title breathing room
   const maxRadius = 255
-  const minRadius = 30
+  const minRadius = 45
   const totalRotation = 3.5 * Math.PI
 
   // Step 1: Dense sampling
@@ -257,17 +257,25 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
 
       {/* ============ CORAL SNAKE BANDS ============ */}
 
-      {/* Continuous snake body outline — fills gaps between butt-capped segments */}
-      <path
-        d={positions.slice(0, -1).map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')}
-        fill="none"
-        stroke="#3E2710"
-        strokeWidth={BORDER_WIDTH}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      {/* Band borders (drawn first, underneath fills) */}
+      {spaces.map((space, i) => {
+        if (i >= positions.length - 1) return null
+        const p1 = positions[i]
+        const p2 = positions[i + 1]
+        const colors = SPACE_COLORS[space.type] || SPACE_COLORS.white
+        return (
+          <path
+            key={`border-${i}`}
+            d={`M${p1.x},${p1.y} L${p2.x},${p2.y}`}
+            fill="none"
+            stroke={colors.stroke}
+            strokeWidth={BORDER_WIDTH}
+            strokeLinecap="round"
+          />
+        )
+      })}
 
-      {/* Band fills (butt caps for crisp color boundaries; body path fills the gaps) */}
+      {/* Band fills (round caps for snake-like look) */}
       {spaces.map((space, i) => {
         if (i >= positions.length - 1) return null
         const p1 = positions[i]
@@ -281,7 +289,7 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
             fill="none"
             stroke={isHighlighted ? '#fff' : colors.fill}
             strokeWidth={BAND_WIDTH}
-            strokeLinecap="butt"
+            strokeLinecap="round"
             opacity={isHighlighted ? 0.9 : 1}
             className={isHighlighted ? 'snakeband-highlight' : undefined}
           />
@@ -307,13 +315,11 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
         )
       })()}
 
-      {/* ============ BAND LABELS — only multiples of 5, START, END ============ */}
+      {/* ============ BAND LABELS — START and END only ============ */}
       {spaces.map((space, i) => {
-        // Only show labels for START, END, and multiples of 5
         const isStart = space.type === 'start'
         const isFinish = space.type === 'finish'
-        const isMultOf5 = i > 0 && i % 5 === 0 && !isFinish
-        if (!isStart && !isFinish && !isMultOf5) return null
+        if (!isStart && !isFinish) return null
 
         const mid = bandMidpoints[i]
         if (!mid) return null
@@ -326,12 +332,12 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
             textAnchor="middle"
             dominantBaseline="central"
             fill={isLight ? '#333' : '#fff'}
-            fontSize={isStart || isFinish ? 9 : 11}
+            fontSize={9}
             fontWeight={700}
             fontFamily="sans-serif"
             pointerEvents="none"
           >
-            {isStart ? 'START' : isFinish ? 'END' : i}
+            {isStart ? 'START' : 'END'}
           </text>
         )
       })}
