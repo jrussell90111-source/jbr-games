@@ -29,7 +29,7 @@ function calculateSpiralData(count: number): { positions: Point[]; midpoints: Po
   const cy = 330   // shifted down 30px for title breathing room
   const maxRadius = 255
   const minRadius = 30
-  const totalRotation = 3.2 * Math.PI
+  const totalRotation = 3.5 * Math.PI
 
   // Step 1: Dense sampling
   const SAMPLES = 2000
