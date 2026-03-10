@@ -3,6 +3,7 @@
 
 import React, { useMemo } from 'react'
 import type { SnakeSpace } from './games/snakebite'
+import type { Player } from './useSnakebite'
 
 /* ------------------------------------------------------------------ */
 /*                         SPIRAL GEOMETRY                             */
@@ -191,13 +192,15 @@ const BORDER_WIDTH = 48
 
 interface SnakeBoardProps {
   spaces: SnakeSpace[]
-  playerPosition: number
+  players: Player[]
+  currentPlayerIndex: number
   highlightSpace?: number | null
 }
 
 const SnakebiteBoard = React.memo(function SnakebiteBoard({
   spaces,
-  playerPosition,
+  players,
+  currentPlayerIndex,
   highlightSpace,
 }: SnakeBoardProps) {
 
@@ -223,8 +226,16 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
     return Math.atan2(p0.y - p1.y, p0.x - p1.x) * (180 / Math.PI) - 90
   }, [positions])
 
-  // Player marker position
-  const playerMid = bandMidpoints[playerPosition]
+  // Group players by position for offset rendering
+  const playersByPosition = useMemo(() => {
+    const map = new Map<number, Player[]>()
+    for (const p of players) {
+      const list = map.get(p.position) || []
+      list.push(p)
+      map.set(p.position, list)
+    }
+    return map
+  }, [players])
 
   return (
     <svg
@@ -359,42 +370,55 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
         )
       })()}
 
-      {/* ============ PLAYER MARKER ============ */}
-      {playerMid && (
-        <g>
-          {/* Glow ring */}
-          <circle
-            cx={playerMid.x}
-            cy={playerMid.y}
-            r={22}
-            fill="none"
-            stroke="#ef5350"
-            strokeWidth={3}
-            opacity={0.8}
-            className="playermarker"
-          />
-          {/* Token circle */}
-          <circle
-            cx={playerMid.x}
-            cy={playerMid.y}
-            r={14}
-            fill="#ef5350"
-            stroke="#fff"
-            strokeWidth={2}
-          />
-          {/* Token icon */}
-          <text
-            x={playerMid.x}
-            y={playerMid.y + 1}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fontSize={14}
-            pointerEvents="none"
-          >
-            &#x1F40D;
-          </text>
-        </g>
-      )}
+      {/* ============ PLAYER MARKERS ============ */}
+      {Array.from(playersByPosition.entries()).map(([pos, playersAtPos]) => {
+        const mid = bandMidpoints[pos]
+        if (!mid) return null
+        // Offset tokens when multiple players share a space
+        const offsets = playersAtPos.length === 1
+          ? [{ dx: 0, dy: 0 }]
+          : playersAtPos.map((_, i) => {
+              const angle = (i / playersAtPos.length) * Math.PI * 2 - Math.PI / 2
+              return { dx: Math.cos(angle) * 10, dy: Math.sin(angle) * 10 }
+            })
+        return playersAtPos.map((p, i) => {
+          const isCurrent = players.indexOf(p) === currentPlayerIndex
+          return (
+            <g key={p.id}>
+              {isCurrent && (
+                <circle
+                  cx={mid.x + offsets[i].dx}
+                  cy={mid.y + offsets[i].dy}
+                  r={22}
+                  fill="none"
+                  stroke={p.color}
+                  strokeWidth={3}
+                  opacity={0.8}
+                  className="playermarker"
+                />
+              )}
+              <circle
+                cx={mid.x + offsets[i].dx}
+                cy={mid.y + offsets[i].dy}
+                r={14}
+                fill={p.color}
+                stroke="#fff"
+                strokeWidth={2}
+              />
+              <text
+                x={mid.x + offsets[i].dx}
+                y={mid.y + offsets[i].dy + 1}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize={14}
+                pointerEvents="none"
+              >
+                {p.emoji}
+              </text>
+            </g>
+          )
+        })
+      })}
     </svg>
   )
 })
