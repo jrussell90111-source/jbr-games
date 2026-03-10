@@ -1,8 +1,8 @@
 // src/SnakebiteScreen.tsx
-// Snake Attack! — Main game screen component
+// Snake Attack! — Main game screen component — v2: multiplayer + setup
 
-import React, { useRef, useEffect, useCallback } from 'react'
-import { useSnakebite } from './useSnakebite'
+import React, { useRef, useEffect, useCallback, useState } from 'react'
+import { useSnakebite, PLAYER_COLORS, PLAYER_EMOJIS } from './useSnakebite'
 import SnakebiteBoard from './SnakebiteBoard'
 import { audio } from './audio'
 
@@ -10,11 +10,9 @@ import { audio } from './audio'
 /*                          DIE FACE                                   */
 /* ------------------------------------------------------------------ */
 
-/** Simple SVG die face */
 function DieFace({ value }: { value: number | null }) {
   if (value === null) return null
 
-  // Dot positions for each die face (on a 3×3 grid: positions 0-8)
   const dotMap: Record<number, number[]> = {
     1: [4],
     2: [0, 8],
@@ -66,6 +64,135 @@ function TimerBar({ remaining, total }: { remaining: number; total: number }) {
 }
 
 /* ------------------------------------------------------------------ */
+/*                      SETUP SCREEN                                   */
+/* ------------------------------------------------------------------ */
+
+function SnakebiteSetup({ onAdd, onRemove, onStart, players, onBack }: {
+  onAdd: (name: string, age: number | 'adult') => void
+  onRemove: (id: number) => void
+  onStart: () => void
+  players: { id: number; name: string; age: number | 'adult'; color: string; emoji: string }[]
+  onBack?: () => void
+}) {
+  const [name, setName] = useState('')
+  const [age, setAge] = useState('')
+  const [isAdult, setIsAdult] = useState(false)
+  const nameRef = useRef<HTMLInputElement>(null)
+
+  const handleAdd = () => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const playerAge = isAdult ? 'adult' as const : (parseInt(age, 10) || 10)
+    onAdd(trimmed, playerAge)
+    setName('')
+    setAge('')
+    setIsAdult(false)
+    nameRef.current?.focus()
+  }
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleAdd()
+    }
+  }
+
+  return (
+    <div className="sb-setup">
+      <h2 className="title" style={{ margin: '0 0 6px 0' }}>Snake Attack!</h2>
+      <p style={{ margin: '0 0 16px 0', opacity: 0.7 }}>Add up to 4 players. Youngest goes first!</p>
+
+      {/* Player list */}
+      {players.length > 0 && (
+        <div className="sb-setup-players">
+          {players.map(p => (
+            <div key={p.id} className="sb-setup-player-row" style={{ borderLeftColor: p.color }}>
+              <span className="sb-setup-player-emoji">{p.emoji}</span>
+              <span className="sb-setup-player-name">{p.name}</span>
+              <span className="sb-setup-player-age">
+                {p.age === 'adult' ? 'Adult' : `Age ${p.age}`}
+              </span>
+              <button
+                type="button"
+                onClick={() => onRemove(p.id)}
+                className="sb-setup-remove"
+                title="Remove player"
+              >
+                &times;
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add player form */}
+      {players.length < 4 && (
+        <div className="sb-setup-form">
+          <div className="sb-setup-input-row">
+            <input
+              ref={nameRef}
+              type="text"
+              placeholder="Player name"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onKeyDown={onKeyDown}
+              className="sb-setup-name-input"
+              maxLength={20}
+              autoComplete="off"
+            />
+            {!isAdult && (
+              <input
+                type="number"
+                placeholder="Age"
+                value={age}
+                onChange={e => setAge(e.target.value)}
+                onKeyDown={onKeyDown}
+                className="sb-setup-age-input"
+                min={1}
+                max={120}
+              />
+            )}
+            <label className="sb-setup-adult-label">
+              <input
+                type="checkbox"
+                checked={isAdult}
+                onChange={e => setIsAdult(e.target.checked)}
+              />
+              Adult
+            </label>
+          </div>
+          <button
+            type="button"
+            onClick={handleAdd}
+            disabled={!name.trim()}
+            style={{ padding: '8px 20px' }}
+          >
+            Add Player
+          </button>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+        <button
+          type="button"
+          onClick={onStart}
+          disabled={players.length === 0}
+          style={{ padding: '12px 32px', fontSize: '1.1rem', transform: players.length > 0 ? 'scale(1.05)' : 'none' }}
+        >
+          Start Game{players.length > 0 ? ` (${players.length} player${players.length > 1 ? 's' : ''})` : ''}
+        </button>
+        {onBack && (
+          <button type="button" onClick={onBack} style={{ opacity: 0.7 }}>
+            Back
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /*                     SCREEN COMPONENT                                */
 /* ------------------------------------------------------------------ */
 
@@ -73,9 +200,11 @@ export default function SnakebiteScreen({ onBack }: { onBack?: () => void }) {
   const g = useSnakebite()
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const currentPlayer = g.players[g.currentPlayerIndex]
+
   // Auto-focus input when answering
   useEffect(() => {
-    if (g.phase === 'answering' && inputRef.current) {
+    if ((g.phase === 'answering' || g.phase === 'final_question') && inputRef.current) {
       inputRef.current.focus()
     }
   }, [g.phase])
@@ -95,7 +224,7 @@ export default function SnakebiteScreen({ onBack }: { onBack?: () => void }) {
 
   // Keyboard: Enter to submit during answering
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && g.phase === 'answering') {
+    if (e.key === 'Enter' && (g.phase === 'answering' || g.phase === 'final_question')) {
       e.preventDefault()
       g.submitAnswer()
     }
@@ -113,17 +242,35 @@ export default function SnakebiteScreen({ onBack }: { onBack?: () => void }) {
     return () => window.removeEventListener('keydown', handler)
   }, [g.phase, g.rollDie])
 
+  // ---------- Setup phase ----------
+  if (g.phase === 'setup') {
+    return (
+      <div className="sb-screen" style={{ opacity: 1, pointerEvents: 'auto' }}>
+        <SnakebiteSetup
+          onAdd={g.addPlayer}
+          onRemove={g.removePlayer}
+          onStart={g.startGame}
+          players={g.players}
+          onBack={onBack}
+        />
+      </div>
+    )
+  }
+
+  // ---------- Game phase ----------
   const isRolling = g.phase === 'rolling' || g.phase === 'moving'
-  const showProblem = g.phase === 'card_draw' || g.phase === 'answering'
+  const showProblem = g.phase === 'card_draw' || g.phase === 'answering' || g.phase === 'final_question'
   const showFeedback = g.phase === 'correct' || g.phase === 'wrong' || g.phase === 'snakebite'
-  const cardColor = g.currentProblem
-    ? (g.board[g.playerPosition]?.type === 'red' ? 'red' : 'brown')
-    : 'brown'
+  const cardColor = g.phase === 'final_question'
+    ? 'final'
+    : g.currentProblem
+      ? (g.board[currentPlayer?.position ?? 0]?.type === 'red' ? 'red' : 'brown')
+      : 'brown'
 
   return (
     <div className="sb-screen" style={{ opacity: 1, pointerEvents: 'auto' }}>
       {/* Header */}
-      <div style={{ display: 'flex', width: '100%', maxWidth: 900, alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+      <div style={{ display: 'flex', width: '100%', maxWidth: 1000, alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <h2 className="title" style={{ margin: 0 }}>Snake Attack!</h2>
         {onBack && (
           <button type="button" onClick={onBack}>
@@ -137,20 +284,46 @@ export default function SnakebiteScreen({ onBack }: { onBack?: () => void }) {
         <div className="sb-board-col">
           <SnakebiteBoard
             spaces={g.board}
-            playerPosition={g.playerPosition}
+            players={g.players}
+            currentPlayerIndex={g.currentPlayerIndex}
           />
         </div>
 
         {/* Right column: Controls + Status */}
         <div className="sb-control-col">
-          {/* Stats */}
-          <div className="sb-stats">
-            <div>Turn: <b>{g.turnCount}</b></div>
-            <div>Correct: <b>{g.correctCount}</b></div>
-            <div>Wrong: <b>{g.wrongCount}</b></div>
-            <div>Snake Bites: <b>{g.snakeBiteCount}</b></div>
-            <div>Position: <b>{g.playerPosition}</b> / {g.board.length - 1}</div>
+          {/* Turn indicator */}
+          {currentPlayer && g.phase !== 'won' && (
+            <div className="sb-turn-header" style={{ borderColor: currentPlayer.color }}>
+              <span style={{ fontSize: '1.3rem' }}>{currentPlayer.emoji}</span>
+              <span style={{ fontWeight: 700, color: currentPlayer.color }}>{currentPlayer.name}&apos;s Turn</span>
+            </div>
+          )}
+
+          {/* Player list */}
+          <div className="sb-player-list">
+            {g.players.map(p => (
+              <div
+                key={p.id}
+                className={`sb-player-item ${p.id === currentPlayer?.id ? 'active' : ''}`}
+                style={{ borderLeftColor: p.color }}
+              >
+                <span className="sb-player-item-emoji">{p.emoji}</span>
+                <span className="sb-player-item-name">{p.name}</span>
+                <span className="sb-player-item-pos">Pos {p.position}/{g.board.length - 1}</span>
+                {p.turnLocked && <span className="sb-player-item-locked" title="Snake bite — skip next turn">&#x1F40D;</span>}
+              </div>
+            ))}
           </div>
+
+          {/* Current player stats */}
+          {currentPlayer && (
+            <div className="sb-stats">
+              <div>Turn: <b>{currentPlayer.stats.turnCount}</b></div>
+              <div>Correct: <b>{currentPlayer.stats.correctCount}</b></div>
+              <div>Wrong: <b>{currentPlayer.stats.wrongCount}</b></div>
+              <div>Bites: <b>{currentPlayer.stats.snakeBiteCount}</b></div>
+            </div>
+          )}
 
           {/* Die */}
           <div className="sb-die-area">
@@ -174,7 +347,7 @@ export default function SnakebiteScreen({ onBack }: { onBack?: () => void }) {
                 onClick={() => { audio.click(); g.rollDie() }}
                 style={{ transform: 'scale(1.15)', padding: '10px 28px', fontSize: '1.1rem' }}
               >
-                {g.turnLocked ? 'Skip Turn (Snake Bite)' : 'Roll Die'}
+                Roll Die
               </button>
             </div>
           )}
@@ -194,24 +367,29 @@ export default function SnakebiteScreen({ onBack }: { onBack?: () => void }) {
                   <span style={{ fontSize: '2rem' }}>&#x1F40D;</span>
                   <div style={{ fontSize: '1.4rem', fontWeight: 700, marginTop: 4 }}>SNAKE BITE!</div>
                   <div style={{ fontSize: '0.9rem', marginTop: 6, opacity: 0.9 }}>
-                    Go back 3 spaces &amp; lose your turn
+                    Go back 3 spaces &amp; lose your next turn
                   </div>
                 </div>
               ) : (
                 <>
                   <div className="sb-card-label">
-                    {cardColor === 'brown' ? 'Easy Card' : 'Hard Card'}
+                    {cardColor === 'final' ? 'FINAL QUESTION' : cardColor === 'brown' ? 'Easy Card' : 'Hard Card'}
                   </div>
                   <div className="sb-card-problem">
                     {g.currentProblem.text}
                   </div>
+                  {cardColor === 'final' && (
+                    <div style={{ fontSize: '0.8rem', marginTop: 4, opacity: 0.8 }}>
+                      Answer correctly to win!
+                    </div>
+                  )}
                 </>
               )}
             </div>
           )}
 
           {/* Answer input + timer */}
-          {g.phase === 'answering' && g.currentProblem && !g.currentProblem.isSnakeBite && (
+          {(g.phase === 'answering' || g.phase === 'final_question') && g.currentProblem && !g.currentProblem.isSnakeBite && (
             <div className="sb-answer-area">
               <TimerBar remaining={g.timerRemaining} total={200} />
               <div className="sb-input-row">
@@ -245,17 +423,26 @@ export default function SnakebiteScreen({ onBack }: { onBack?: () => void }) {
           )}
 
           {/* Won! */}
-          {g.phase === 'won' && (
+          {g.phase === 'won' && g.winner && (
             <div className="sb-won-modal">
               <div style={{ fontSize: '2.5rem' }}>&#x1F389;</div>
-              <h3 style={{ margin: '6px 0' }}>You Won!</h3>
-              <div className="sb-stats" style={{ marginBottom: 10 }}>
-                <div>Turns: <b>{g.turnCount}</b></div>
-                <div>Correct Answers: <b>{g.correctCount}</b></div>
-                <div>Wrong Answers: <b>{g.wrongCount}</b></div>
-                <div>Snake Bites: <b>{g.snakeBiteCount}</b></div>
+              <h3 style={{ margin: '6px 0', color: g.winner.color }}>
+                {g.winner.emoji} {g.winner.name} Wins!
+              </h3>
+              <div className="sb-won-stats">
+                {g.players.map(p => (
+                  <div key={p.id} className="sb-won-player-row" style={{ borderLeftColor: p.color }}>
+                    <span>{p.emoji} {p.name}</span>
+                    <span>Pos {p.position}</span>
+                    <span>{p.stats.correctCount}&#x2713; {p.stats.wrongCount}&#x2717;</span>
+                    <span>{p.stats.snakeBiteCount} &#x1F40D;</span>
+                  </div>
+                ))}
               </div>
-              <button type="button" onClick={g.resetGame}>Play Again</button>
+              <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                <button type="button" onClick={g.resetGame}>Play Again</button>
+                {onBack && <button type="button" onClick={onBack} style={{ opacity: 0.7 }}>Menu</button>}
+              </div>
             </div>
           )}
 
@@ -267,7 +454,7 @@ export default function SnakebiteScreen({ onBack }: { onBack?: () => void }) {
           </div>
 
           {/* Reset */}
-          {g.phase === 'idle' && g.turnCount > 0 && (
+          {g.phase === 'idle' && currentPlayer?.stats.turnCount > 0 && (
             <div className="controls" style={{ justifyContent: 'center', marginTop: 6 }}>
               <button type="button" onClick={g.resetGame} style={{ opacity: 0.7, fontSize: '0.85rem' }}>
                 New Game
