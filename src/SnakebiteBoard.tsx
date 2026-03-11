@@ -29,8 +29,8 @@ function calculateSpiralData(count: number): { positions: Point[]; midpoints: Po
   const cx = 300
   const cy = 330   // shifted down 30px for title breathing room
   const maxRadius = 255
-  const minRadius = 30
-  const totalRotation = 3.2 * Math.PI
+  const minRadius = 45
+  const totalRotation = 3.5 * Math.PI
 
   // Step 1: Dense sampling
   const SAMPLES = 2000
@@ -73,15 +73,18 @@ function calculateSpiralData(count: number): { positions: Point[]; midpoints: Po
     positions.push(pointAtArcFrac(i / (count - 1)))
   }
 
-  // Step 4: True arc-length midpoints for each band
-  //   Band i spans from positions[i] to positions[i+1],
-  //   so its midpoint is at arc fraction (i + 0.5) / (count - 1)
+  // Step 4: Line-segment midpoints for each band
+  //   Bands are rendered as straight lines from positions[i] to positions[i+1],
+  //   so the visual center is the midpoint of that straight-line segment.
   const midpoints: Point[] = []
   for (let i = 0; i < count; i++) {
     if (i >= count - 1) {
       midpoints.push(positions[i]) // last space (finish) uses its own position
     } else {
-      midpoints.push(pointAtArcFrac((i + 0.5) / (count - 1)))
+      midpoints.push({
+        x: (positions[i].x + positions[i + 1].x) / 2,
+        y: (positions[i].y + positions[i + 1].y) / 2,
+      })
     }
   }
 
@@ -226,23 +229,16 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
     return Math.atan2(p0.y - p1.y, p0.x - p1.x) * (180 / Math.PI) - 90
   }, [positions])
 
-  // Group players by position for stacking
+  // Group players by position for offset rendering
   const playersByPosition = useMemo(() => {
-    const map: Record<number, Player[]> = {}
+    const map = new Map<number, Player[]>()
     for (const p of players) {
-      if (!map[p.position]) map[p.position] = []
-      map[p.position].push(p)
+      const list = map.get(p.position) || []
+      list.push(p)
+      map.set(p.position, list)
     }
     return map
   }, [players])
-
-  // Offset for stacking multiple players on same space
-  const getPlayerOffset = (idx: number, total: number): { dx: number; dy: number } => {
-    if (total <= 1) return { dx: 0, dy: 0 }
-    const angle = (idx / total) * 2 * Math.PI - Math.PI / 2
-    const dist = 28
-    return { dx: dist * Math.cos(angle), dy: dist * Math.sin(angle) }
-  }
 
   return (
     <svg
@@ -261,7 +257,7 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
 
       {/* ============ CORAL SNAKE BANDS ============ */}
 
-      {/* Band borders (darker outline behind each band) */}
+      {/* Band borders (drawn first, underneath fills) */}
       {spaces.map((space, i) => {
         if (i >= positions.length - 1) return null
         const p1 = positions[i]
@@ -275,12 +271,11 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
             stroke={colors.stroke}
             strokeWidth={BORDER_WIDTH}
             strokeLinecap="round"
-            strokeLinejoin="round"
           />
         )
       })}
 
-      {/* Band fills (main colored segments) */}
+      {/* Band fills (round caps for snake-like look) */}
       {spaces.map((space, i) => {
         if (i >= positions.length - 1) return null
         const p1 = positions[i]
@@ -295,7 +290,6 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
             stroke={isHighlighted ? '#fff' : colors.fill}
             strokeWidth={BAND_WIDTH}
             strokeLinecap="round"
-            strokeLinejoin="round"
             opacity={isHighlighted ? 0.9 : 1}
             className={isHighlighted ? 'snakeband-highlight' : undefined}
           />
@@ -321,13 +315,11 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
         )
       })()}
 
-      {/* ============ BAND LABELS — only multiples of 5, START, END ============ */}
+      {/* ============ BAND LABELS — START and END only ============ */}
       {spaces.map((space, i) => {
-        // Only show labels for START, END, and multiples of 5
         const isStart = space.type === 'start'
         const isFinish = space.type === 'finish'
-        const isMultOf5 = i > 0 && i % 5 === 0 && !isFinish
-        if (!isStart && !isFinish && !isMultOf5) return null
+        if (!isStart && !isFinish) return null
 
         const mid = bandMidpoints[i]
         if (!mid) return null
@@ -340,12 +332,12 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
             textAnchor="middle"
             dominantBaseline="central"
             fill={isLight ? '#333' : '#fff'}
-            fontSize={isStart || isFinish ? 9 : 11}
+            fontSize={9}
             fontWeight={700}
             fontFamily="sans-serif"
             pointerEvents="none"
           >
-            {isStart ? 'START' : isFinish ? 'END' : i}
+            {isStart ? 'START' : 'END'}
           </text>
         )
       })}
@@ -370,60 +362,57 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
         const offsetDist = 28
         return (
           <SnakeHead
-            x={last.x + (dx / dist) * offsetDist}
-            y={last.y + (dy / dist) * offsetDist}
+            x={last.x + (dx / dist) * offsetDist + 8}
+            y={last.y + (dy / dist) * offsetDist - 10}
             angle={headAngle}
           />
         )
       })()}
 
       {/* ============ PLAYER MARKERS ============ */}
-      {Object.entries(playersByPosition).map(([posStr, playersAtPos]) => {
-        const posIdx = parseInt(posStr, 10)
-        const mid = bandMidpoints[posIdx]
+      {Array.from(playersByPosition.entries()).map(([pos, playersAtPos]) => {
+        const mid = bandMidpoints[pos]
         if (!mid) return null
-
-        return playersAtPos.map((player, stackIdx) => {
-          const offset = getPlayerOffset(stackIdx, playersAtPos.length)
-          const px = mid.x + offset.dx
-          const py = mid.y + offset.dy
-          const isCurrent = player.id === players[currentPlayerIndex]?.id
-
+        // Offset tokens when multiple players share a space
+        const offsets = playersAtPos.length === 1
+          ? [{ dx: 0, dy: 0 }]
+          : playersAtPos.map((_, i) => {
+              const angle = (i / playersAtPos.length) * Math.PI * 2 - Math.PI / 2
+              return { dx: Math.cos(angle) * 10, dy: Math.sin(angle) * 10 }
+            })
+        return playersAtPos.map((p, i) => {
+          const isCurrent = players.indexOf(p) === currentPlayerIndex
           return (
-            <g key={player.id}>
-              {/* Glow for current player */}
+            <g key={p.id}>
               {isCurrent && (
                 <circle
-                  cx={px}
-                  cy={py}
+                  cx={mid.x + offsets[i].dx}
+                  cy={mid.y + offsets[i].dy}
                   r={22}
                   fill="none"
-                  stroke={player.color}
+                  stroke={p.color}
                   strokeWidth={3}
                   opacity={0.8}
                   className="playermarker"
                 />
               )}
-              {/* Player token circle */}
               <circle
-                cx={px}
-                cy={py}
-                r={isCurrent ? 14 : 11}
-                fill={player.color}
+                cx={mid.x + offsets[i].dx}
+                cy={mid.y + offsets[i].dy}
+                r={14}
+                fill={p.color}
                 stroke="#fff"
                 strokeWidth={2}
-                opacity={isCurrent ? 1 : 0.8}
               />
-              {/* Player emoji */}
               <text
-                x={px}
-                y={py + 1}
+                x={mid.x + offsets[i].dx}
+                y={mid.y + offsets[i].dy + 1}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fontSize={isCurrent ? 14 : 11}
+                fontSize={14}
                 pointerEvents="none"
               >
-                {player.emoji}
+                {p.emoji}
               </text>
             </g>
           )

@@ -692,15 +692,15 @@ button:disabled { opacity: .6 }
 .rb-topline:hover { background: rgba(180, 130, 0, 0.35) !important; }
 
 /* ======== SNAKEBITE GAME ======== */
-.sb-screen { width: 100%; max-width: 900px; }
+.sb-screen { width: 100%; max-width: 1000px; }
 
 .sb-layout {
   display: grid;
-  grid-template-columns: minmax(300px, 1fr) 280px;
+  grid-template-columns: minmax(360px, 1fr) 320px;
   gap: 16px;
   width: 100%;
 }
-@media (max-width: 700px) {
+@media (max-width: 750px) {
   .sb-layout { grid-template-columns: 1fr; }
 }
 
@@ -714,9 +714,44 @@ button:disabled { opacity: .6 }
   box-shadow: 0 8px 30px rgba(0,0,0,0.35);
 }
 
+/* ---- Turn header ---- */
+.sb-turn-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border-left: 5px solid var(--accent);
+  background: rgba(255,255,255,.06);
+  font-size: 1.1rem;
+}
+
+/* ---- Player list ---- */
+.sb-player-list {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.sb-player-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border-left: 4px solid #666;
+  background: rgba(255,255,255,.04);
+  font-size: 0.85rem;
+  transition: background 200ms;
+}
+.sb-player-item.active {
+  background: rgba(255,255,255,.12);
+  font-weight: 700;
+  border-left-width: 6px;
+}
+.sb-player-item-emoji { font-size: 1rem; }
+.sb-player-item-name { flex: 1; }
+.sb-player-item-pos { opacity: 0.7; font-size: 0.8rem; }
+.sb-player-item-locked { font-size: 0.9rem; }
+
+/* ---- Stats ---- */
 .sb-stats { display: flex; gap: 14px; font-size: 14px; flex-wrap: wrap; }
 .sb-stats b { color: var(--accent); }
 
+/* ---- Die ---- */
 .sb-die-area { display: flex; align-items: center; gap: 14px; }
 .sb-die {
   width: 64px; height: 64px;
@@ -732,6 +767,7 @@ button:disabled { opacity: .6 }
   100% { transform: rotate(720deg) scale(1); }
 }
 
+/* ---- Problem card ---- */
 .sb-card {
   padding: 14px;
   border-radius: 12px;
@@ -742,6 +778,12 @@ button:disabled { opacity: .6 }
 }
 .sb-card-brown { background: #8B6914; color: #fff; }
 .sb-card-red   { background: #b71c1c; color: #fff; }
+.sb-card-final {
+  background: linear-gradient(135deg, #6a1b9a, #4a148c);
+  color: #ffd54f;
+  border-color: #ab47bc;
+  font-size: 1.3rem;
+}
 .sb-card-snakebite {
   background: linear-gradient(135deg, #2e7d32, #1b5e20);
   color: #ffd54f;
@@ -749,6 +791,7 @@ button:disabled { opacity: .6 }
   font-size: 1.3rem;
 }
 
+/* ---- Timer ---- */
 .sb-timer-wrap {
   width: 100%;
   height: 22px;
@@ -772,6 +815,7 @@ button:disabled { opacity: .6 }
   text-shadow: 0 1px 2px rgba(0,0,0,.6);
 }
 
+/* ---- Answer area ---- */
 .sb-answer-area { display: flex; flex-direction: column; gap: 8px; }
 .sb-answer-input {
   font-size: 1.4rem;
@@ -786,6 +830,7 @@ button:disabled { opacity: .6 }
 .sb-answer-input:focus { outline: none; border-color: var(--accent); }
 .sb-input-row { display: flex; gap: 8px; }
 
+/* ---- Feedback ---- */
 .sb-feedback {
   padding: 10px;
   border-radius: 10px;
@@ -794,26 +839,105 @@ button:disabled { opacity: .6 }
   font-size: 1.1rem;
 }
 
+/* ---- Won modal ---- */
 .sb-won-modal {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.65);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 60;
-}
-.sb-won-modal > div {
-  background: #0f1a3b;
-  border: 2px solid #1f2a5a;
+  padding: 18px;
   border-radius: 14px;
-  padding: 24px;
   text-align: center;
-  max-width: 400px;
-  box-shadow: 0 18px 60px rgba(0,0,0,0.45);
+  background: rgba(255,255,255,.06);
+  border: 2px solid rgba(255,255,255,.12);
+}
+.sb-won-stats {
+  display: flex; flex-direction: column; gap: 6px;
+  margin: 10px 0;
+}
+.sb-won-player-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border-left: 4px solid #666;
+  background: rgba(255,255,255,.05);
+  font-size: 0.85rem;
 }
 
-/* SVG Board */
-.snakeboard { width: 100%; max-width: 460px; height: auto; }
-.snakespace { transition: fill 200ms; }
-.playermarker { transition: all 400ms ease; }
+/* ---- Setup screen ---- */
+.sb-setup {
+  width: 100%; max-width: 480px;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.sb-setup-players {
+  width: 100%;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.sb-setup-player-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border-left: 5px solid #666;
+  background: rgba(255,255,255,.06);
+}
+.sb-setup-player-emoji { font-size: 1.2rem; }
+.sb-setup-player-name { flex: 1; font-weight: 600; text-align: left; }
+.sb-setup-player-age { opacity: 0.6; font-size: 0.85rem; }
+.sb-setup-remove {
+  background: none; border: none; color: #ef5350;
+  font-size: 1.4rem; cursor: pointer; padding: 0 4px;
+  line-height: 1;
+}
+.sb-setup-remove:hover { color: #ff7043; }
+
+.sb-setup-form {
+  width: 100%;
+  display: flex; flex-direction: column; gap: 8px;
+  align-items: center;
+}
+.sb-setup-input-row {
+  display: flex; gap: 8px; width: 100%;
+  align-items: center; flex-wrap: wrap;
+}
+.sb-setup-name-input {
+  flex: 1; min-width: 120px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 2px solid #31408a;
+  background: #1a285c;
+  color: #fff;
+  font-size: 1rem;
+}
+.sb-setup-name-input:focus { outline: none; border-color: var(--accent); }
+.sb-setup-age-input {
+  width: 70px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 2px solid #31408a;
+  background: #1a285c;
+  color: #fff;
+  font-size: 1rem;
+  text-align: center;
+}
+.sb-setup-age-input:focus { outline: none; border-color: var(--accent); }
+.sb-setup-adult-label {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 0.9rem; opacity: 0.8;
+  cursor: pointer; white-space: nowrap;
+}
+
+/* SVG Board — coral snake bands */
+.snakeboard { width: 100%; max-width: 600px; height: auto; }
+.snakeband-highlight {
+  filter: brightness(1.4);
+  transition: stroke 200ms;
+}
+.playermarker {
+  transition: all 400ms ease;
+  animation: sbPulse 1.5s ease-in-out infinite;
+}
+@keyframes sbPulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
 
 /* Menu categories */
 .menuCategory { margin-bottom: 18px; }

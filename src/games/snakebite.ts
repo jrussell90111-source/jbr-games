@@ -111,3 +111,36 @@ function generateHardProblem(): MathProblem {
   const c = randInt(2, 6)
   return { text: `${a} + ${b} \u00d7 ${c} =`, answer: a + b * c, isSnakeBite: false }
 }
+
+/* ---------- Final Question (to win the game) ---------- */
+
+export function generateFinalQuestion(): MathProblem {
+  const type = randInt(0, 3)
+
+  if (type === 0) {
+    // Double-digit × double-digit
+    const a = randInt(11, 25)
+    const b = randInt(11, 19)
+    return { text: `${a} \u00d7 ${b} =`, answer: a * b, isSnakeBite: false }
+  }
+  if (type === 1) {
+    // Three-term order of operations: a + b × c
+    const a = randInt(10, 30)
+    const b = randInt(3, 9)
+    const c = randInt(3, 9)
+    return { text: `${a} + ${b} \u00d7 ${c} =`, answer: a + b * c, isSnakeBite: false }
+  }
+  if (type === 2) {
+    // Sum of two products: (a × b) + (c × d)
+    const a = randInt(3, 9)
+    const b = randInt(3, 9)
+    const c = randInt(3, 9)
+    const d = randInt(3, 9)
+    return { text: `(${a} \u00d7 ${b}) + (${c} \u00d7 ${d}) =`, answer: a * b + c * d, isSnakeBite: false }
+  }
+  // Large division: three-digit ÷ single-digit
+  const divisor = randInt(3, 9)
+  const result = randInt(12, 50)
+  const dividend = divisor * result
+  return { text: `${dividend} \u00f7 ${divisor} =`, answer: result, isSnakeBite: false }
+}
