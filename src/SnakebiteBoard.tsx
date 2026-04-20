@@ -1,45 +1,52 @@
 // src/SnakebiteBoard.tsx
-// SVG spiral snake board for Snake Attack! — v3c: tail at bottom, head at ~2 o'clock, arc-midpoint labels
+// SVG spiral snake board for Snake Attack! — v3d: smooth arc bands, head attached to END circle,
+// true arc-midpoint token/label placement.
 
 import React, { useMemo } from 'react'
 import type { SnakeSpace } from './games/snakebite'
 import type { Player } from './useSnakebite'
 
 /* ------------------------------------------------------------------ */
-/*                         SPIRAL GEOMETRY                             */
+/*                         SPIRAL GEOMETRY                            */
 /* ------------------------------------------------------------------ */
 
 interface Point { x: number; y: number }
 
 /** Archimedean spiral point at parameter t ∈ [0,1] */
 function spiralPoint(t: number, cx: number, cy: number, maxR: number, minR: number, totalRot: number): Point {
-  const angle = Math.PI / 2 + t * totalRot   // start at bottom (6 o'clock)
+  const angle = Math.PI / 2 + t * totalRot    // start at bottom (6 o'clock)
   const radius = maxR - t * (maxR - minR)
   return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) }
 }
 
+interface SpiralData {
+  positions: Point[]     // count entries — band endpoints at equal arc-length intervals
+  midpoints: Point[]     // count entries — true arc midpoints per space (last = its own position)
+  bandPaths: string[]    // count-1 entries — smooth SVG path "d" for each band (polyline along the arc)
+}
+
 /**
- * Calculate evenly-spaced spiral positions AND true arc-length midpoints.
- * 1. Sample a dense set of points along the spiral
- * 2. Compute cumulative arc lengths
- * 3. Re-sample at equal arc-length intervals for band endpoints
- * 4. Compute midpoints at half-step arc lengths (true center of each band)
+ * Build everything needed to render the coral-snake spiral:
+ *  1. Dense sample of the spiral, then integrate to get arc length.
+ *  2. Space endpoints at equal arc-length intervals (for band boundaries).
+ *  3. True arc midpoints for each band (for centered tokens / labels).
+ *  4. A smooth SVG path per band made from ~8 samples along its arc (not a chord).
  */
-function calculateSpiralData(count: number): { positions: Point[]; midpoints: Point[] } {
+function calculateSpiralData(count: number): SpiralData {
   const cx = 300
-  const cy = 330   // shifted down 30px for title breathing room
+  const cy = 330              // shifted down 30px for title breathing room
   const maxRadius = 255
   const minRadius = 45
   const totalRotation = 3.5 * Math.PI
 
-  // Step 1: Dense sampling
+  // Step 1: dense sampling
   const SAMPLES = 2000
   const raw: Point[] = []
   for (let i = 0; i <= SAMPLES; i++) {
     raw.push(spiralPoint(i / SAMPLES, cx, cy, maxRadius, minRadius, totalRotation))
   }
 
-  // Step 2: Cumulative arc lengths
+  // Step 2: cumulative arc lengths
   const cumLen: number[] = [0]
   for (let i = 1; i <= SAMPLES; i++) {
     const dx = raw[i].x - raw[i - 1].x
@@ -48,9 +55,10 @@ function calculateSpiralData(count: number): { positions: Point[]; midpoints: Po
   }
   const totalLen = cumLen[SAMPLES]
 
-  // Helper: get point at a given arc-length fraction [0,1]
+  // Point at a given arc-length fraction [0,1]
   function pointAtArcFrac(frac: number): Point {
-    const targetLen = frac * totalLen
+    const clamped = Math.max(0, Math.min(1, frac))
+    const targetLen = clamped * totalLen
     let lo = 0, hi = SAMPLES
     while (lo < hi) {
       const mid = (lo + hi) >> 1
@@ -67,19 +75,17 @@ function calculateSpiralData(count: number): { positions: Point[]; midpoints: Po
     }
   }
 
-  // Step 3: Band endpoint positions at equal arc-length intervals
+  // Step 3: band endpoints at equal arc-length intervals
   const positions: Point[] = []
   for (let i = 0; i < count; i++) {
     positions.push(pointAtArcFrac(i / (count - 1)))
   }
 
-  // Step 4: Line-segment midpoints for each band
-  //   Bands are rendered as straight lines from positions[i] to positions[i+1],
-  //   so the visual center is the midpoint of that straight-line segment.
+  // Step 4a: true arc-midpoints per band (last space = its own position)
   const midpoints: Point[] = []
   for (let i = 0; i < count; i++) {
     if (i >= count - 1) {
-      midpoints.push(positions[i]) // last space (finish) uses its own position
+      midpoints.push(positions[i])
     } else {
       midpoints.push({
         x: (positions[i].x + positions[i + 1].x) / 2,
@@ -88,11 +94,25 @@ function calculateSpiralData(count: number): { positions: Point[]; midpoints: Po
     }
   }
 
-  return { positions, midpoints }
+  // Step 4b: smooth band paths — each band is a polyline of SUB samples along its arc
+  const SUB = 8
+  const bandPaths: string[] = []
+  for (let i = 0; i < count - 1; i++) {
+    const a = i / (count - 1)
+    const b = (i + 1) / (count - 1)
+    let d = ''
+    for (let j = 0; j <= SUB; j++) {
+      const p = pointAtArcFrac(a + (b - a) * (j / SUB))
+      d += (j === 0 ? `M${p.x.toFixed(2)},${p.y.toFixed(2)}` : ` L${p.x.toFixed(2)},${p.y.toFixed(2)}`)
+    }
+    bandPaths.push(d)
+  }
+
+  return { positions, midpoints, bandPaths }
 }
 
 /* ------------------------------------------------------------------ */
-/*                        COLOR MAPPING                                */
+/*                        COLOR MAPPING                               */
 /* ------------------------------------------------------------------ */
 
 const DARK_BROWN = '#5D3A1A'
@@ -107,13 +127,14 @@ const SPACE_COLORS: Record<string, { fill: string; stroke: string }> = {
 }
 
 /* ------------------------------------------------------------------ */
-/*                   SNAKE HEAD SVG — menacing side view               */
+/*                 SNAKE HEAD SVG — menacing side view                */
 /* ------------------------------------------------------------------ */
 
 function SnakeHead({ x, y, angle }: { x: number; y: number; angle: number }) {
-  // Side-view menacing snake head — dark brown to match start band
+  // Side-view menacing snake head — dark brown to match start band.
+  // Local +x is the snout direction; local -x is the neck/back.
   return (
-    <g transform={`translate(${x},${y}) rotate(${angle})`}>
+    <g transform={`translate(${x},${y}) rotate(${angle}) scale(1.2)`}>
       {/* Head shape — angular/triangular side profile, wider snout */}
       <path
         d="M-22,-14 C-16,-20 8,-22 26,-10 C30,-6 30,6 26,10 C8,22 -16,20 -22,14 Z"
@@ -165,7 +186,7 @@ function SnakeHead({ x, y, angle }: { x: number; y: number; angle: number }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*                        SNAKE TAIL SVG                               */
+/*                        SNAKE TAIL SVG                              */
 /* ------------------------------------------------------------------ */
 
 function SnakeTail({ x, y, angle }: { x: number; y: number; angle: number }) {
@@ -183,14 +204,14 @@ function SnakeTail({ x, y, angle }: { x: number; y: number; angle: number }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*                         BAND WIDTH                                  */
+/*                          BAND WIDTH                                */
 /* ------------------------------------------------------------------ */
 
 const BAND_WIDTH = 44
 const BORDER_WIDTH = 48
 
 /* ------------------------------------------------------------------ */
-/*                         BOARD COMPONENT                             */
+/*                       BOARD COMPONENT                              */
 /* ------------------------------------------------------------------ */
 
 interface SnakeBoardProps {
@@ -207,12 +228,12 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
   highlightSpace,
 }: SnakeBoardProps) {
 
-  const { positions, midpoints: bandMidpoints } = useMemo(
+  const { positions, midpoints, bandPaths } = useMemo(
     () => calculateSpiralData(spaces.length),
     [spaces.length],
   )
 
-  // Head angle: direction from second-to-last → last position, rotated to point "forward"
+  // Head angle — direction from second-to-last → last position, rotated to point "forward"
   const headAngle = useMemo(() => {
     const n = positions.length
     if (n < 2) return 0
@@ -221,13 +242,45 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
     return Math.atan2(pB.y - pA.y, pB.x - pA.x) * (180 / Math.PI) - 90
   }, [positions])
 
-  // Tail angle: direction from second → first position (pointing outward)
+  // Tail angle — direction from second → first position (pointing outward)
   const tailAngle = useMemo(() => {
     if (positions.length < 2) return 0
     const p0 = positions[0]
     const p1 = positions[1]
     return Math.atan2(p0.y - p1.y, p0.x - p1.x) * (180 / Math.PI) - 90
   }, [positions])
+
+  // Head anchor — shifted in the head's own forward (local +x) direction so the
+  // back of the head overlaps the END circle instead of floating off of it.
+  // Head back sits at local x = -22; the END circle has radius BAND_WIDTH/2 = 22.
+  // forwardOffset = 6 puts the head's back 16px from the END circle center — an
+  // ~6px overlap with the yellow circle, enough to read "attached" without hiding END.
+  const headPos = useMemo(() => {
+    if (positions.length < 2) return { x: 0, y: 0 }
+    const last = positions[positions.length - 1]
+    const rad = headAngle * Math.PI / 180
+    // Negative: head slides back toward body so its larger (scale 1.2)
+    // outline fully covers the last band's end — no dark gap peeking through.
+    const forwardOffset = 4
+    return {
+      x: last.x + Math.cos(rad) * forwardOffset,
+      y: last.y + Math.sin(rad) * forwardOffset,
+    }
+  }, [positions, headAngle])
+
+  // END label + circle position — offset into the head's lower/mouth area
+  // so the yellow "END" reads as being on the snake's mouth rather than its
+  // back/neck. lx=4 forward of head center, ly=10 below center (lower jaw).
+  const endPos = useMemo(() => {
+    if (positions.length < 1) return { x: 0, y: 0 }
+    const rad = (headAngle * Math.PI) / 180
+    const lx = 4
+    const ly = 10
+    return {
+      x: headPos.x + lx * Math.cos(rad) - ly * Math.sin(rad),
+      y: headPos.y + lx * Math.sin(rad) + ly * Math.cos(rad),
+    }
+  }, [headPos, headAngle, positions.length])
 
   // Group players by position for offset rendering
   const playersByPosition = useMemo(() => {
@@ -240,17 +293,20 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
     return map
   }, [players])
 
+  const lastIdx = spaces.length - 1
+
   return (
     <svg
       viewBox="0 0 600 660"
       className="snakeboard"
       role="img"
       aria-label="Snake Attack game board — coral snake spiral from tail to head"
+      shapeRendering="geometricPrecision"
     >
       {/* Background */}
       <rect x={0} y={0} width={600} height={660} rx={16} fill="#0a1628" />
 
-      {/* Title — more room now with spiral pushed down */}
+      {/* Title */}
       <text x={300} y={34} textAnchor="middle" fill="#ffd54f" fontSize={22} fontWeight={700} fontFamily="sans-serif">
         Snake Attack!
       </text>
@@ -259,86 +315,41 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
 
       {/* Band borders (drawn first, underneath fills) */}
       {spaces.map((space, i) => {
-        if (i >= positions.length - 1) return null
-        const p1 = positions[i]
-        const p2 = positions[i + 1]
+        if (i >= bandPaths.length) return null
         const colors = SPACE_COLORS[space.type] || SPACE_COLORS.white
         return (
           <path
             key={`border-${i}`}
-            d={`M${p1.x},${p1.y} L${p2.x},${p2.y}`}
+            d={bandPaths[i]}
             fill="none"
             stroke={colors.stroke}
             strokeWidth={BORDER_WIDTH}
-            strokeLinecap="round"
+            strokeLinecap={i === 0 ? 'round' : 'butt'}
+            strokeLinejoin="round"
           />
         )
       })}
 
-      {/* Band fills (round caps for snake-like look) */}
+      {/* Band fills (round caps + round joins = smooth snake body) */}
       {spaces.map((space, i) => {
-        if (i >= positions.length - 1) return null
-        const p1 = positions[i]
-        const p2 = positions[i + 1]
+        if (i >= bandPaths.length) return null
         const colors = SPACE_COLORS[space.type] || SPACE_COLORS.white
         const isHighlighted = highlightSpace === i
         return (
           <path
             key={`band-${i}`}
-            d={`M${p1.x},${p1.y} L${p2.x},${p2.y}`}
+            d={bandPaths[i]}
             fill="none"
             stroke={isHighlighted ? '#fff' : colors.fill}
             strokeWidth={BAND_WIDTH}
-            strokeLinecap="round"
+            // Round cap on band 0 only gives the tail end a snake-tip shape.
+            // Band 1 draws on top with butt cap, overwriting band 0's far-end
+            // round cap — only the tail-end stays visually rounded.
+            strokeLinecap={i === 0 ? 'round' : 'butt'}
+            strokeLinejoin="round"
             opacity={isHighlighted ? 0.9 : 1}
             className={isHighlighted ? 'snakeband-highlight' : undefined}
           />
-        )
-      })}
-
-      {/* Last space (finish) — render as a filled circle at the last position */}
-      {(() => {
-        const lastIdx = spaces.length - 1
-        const lastPos = positions[lastIdx]
-        if (!lastPos) return null
-        const colors = SPACE_COLORS[spaces[lastIdx].type] || SPACE_COLORS.white
-        const isHighlighted = highlightSpace === lastIdx
-        return (
-          <circle
-            cx={lastPos.x}
-            cy={lastPos.y}
-            r={BAND_WIDTH / 2}
-            fill={isHighlighted ? '#fff' : colors.fill}
-            stroke={colors.stroke}
-            strokeWidth={2}
-          />
-        )
-      })()}
-
-      {/* ============ BAND LABELS — START and END only ============ */}
-      {spaces.map((space, i) => {
-        const isStart = space.type === 'start'
-        const isFinish = space.type === 'finish'
-        if (!isStart && !isFinish) return null
-
-        const mid = bandMidpoints[i]
-        if (!mid) return null
-        const isLight = space.type === 'white' || space.type === 'finish'
-        return (
-          <text
-            key={`label-${i}`}
-            x={mid.x}
-            y={mid.y}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill={isLight ? '#333' : '#fff'}
-            fontSize={9}
-            fontWeight={700}
-            fontFamily="sans-serif"
-            pointerEvents="none"
-          >
-            {isStart ? 'START' : 'END'}
-          </text>
         )
       })}
 
@@ -351,34 +362,22 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
         />
       )}
 
-      {/* ============ SNAKE HEAD (center, position 39) ============ */}
-      {positions[positions.length - 1] && (() => {
-        const last = positions[positions.length - 1]
-        // Offset head beyond the last position in the direction of travel
-        const prev = positions[positions.length - 2]
-        const dx = last.x - prev.x
-        const dy = last.y - prev.y
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1
-        const offsetDist = 28
-        return (
-          <SnakeHead
-            x={last.x + (dx / dist) * offsetDist + 8}
-            y={last.y + (dy / dist) * offsetDist - 10}
-            angle={headAngle}
-          />
-        )
-      })()}
+      {/* ============ SNAKE HEAD (attached to END circle) ============ */}
+      <SnakeHead x={headPos.x} y={headPos.y} angle={headAngle} />
 
       {/* ============ PLAYER MARKERS ============ */}
       {Array.from(playersByPosition.entries()).map(([pos, playersAtPos]) => {
-        const mid = bandMidpoints[pos]
+        const mid = midpoints[pos]
         if (!mid) return null
         // Offset tokens when multiple players share a space
         const offsets = playersAtPos.length === 1
           ? [{ dx: 0, dy: 0 }]
           : playersAtPos.map((_, i) => {
+              // Small offsets (3px) so tokens stay well inside the 22px
+              // band half-width even with r=11 tokens — never crosses the
+              // line between color bands. Overlap is fine per user.
               const angle = (i / playersAtPos.length) * Math.PI * 2 - Math.PI / 2
-              return { dx: Math.cos(angle) * 10, dy: Math.sin(angle) * 10 }
+              return { dx: Math.cos(angle) * 3, dy: Math.sin(angle) * 3 }
             })
         return playersAtPos.map((p, i) => {
           const isCurrent = players.indexOf(p) === currentPlayerIndex
@@ -388,7 +387,7 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
                 <circle
                   cx={mid.x + offsets[i].dx}
                   cy={mid.y + offsets[i].dy}
-                  r={22}
+                  r={14}
                   fill="none"
                   stroke={p.color}
                   strokeWidth={3}
@@ -399,7 +398,7 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
               <circle
                 cx={mid.x + offsets[i].dx}
                 cy={mid.y + offsets[i].dy}
-                r={14}
+                r={11}
                 fill={p.color}
                 stroke="#fff"
                 strokeWidth={2}
@@ -409,7 +408,7 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
                 y={mid.y + offsets[i].dy + 1}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fontSize={14}
+                fontSize={12}
                 pointerEvents="none"
               >
                 {p.emoji}
@@ -418,6 +417,60 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
           )
         })
       })}
+      {/* START + END labels — rendered AFTER player tokens so they always sit on top */}
+      {/* START label — rendered AFTER tail so it sits on top, yellow to match END */}
+      {spaces.map((space, i) => {
+        if (space.type !== 'start') return null
+        const mid = midpoints[i]
+        if (!mid) return null
+        return (
+          <text
+            key={`label-start-${i}`}
+            x={mid.x}
+            y={mid.y}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="#ffd54f"
+            fontSize={10}
+            fontWeight={800}
+            fontFamily="sans-serif"
+            pointerEvents="none"
+            style={{
+              paintOrder: 'stroke',
+              stroke: '#3a2106',
+              strokeWidth: 3,
+              strokeLinejoin: 'round',
+            }}
+          >
+            START
+          </text>
+        )
+      })}
+
+      {/* END label — rendered AFTER the head, positioned at the head's mouth level */}
+      {(() => {
+        return (
+          <text
+            x={endPos.x}
+            y={endPos.y}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="#ffd54f"
+            fontSize={10}
+            fontWeight={800}
+            fontFamily="sans-serif"
+            pointerEvents="none"
+            style={{
+              paintOrder: 'stroke',
+              stroke: '#3a2106',
+              strokeWidth: 3,
+              strokeLinejoin: 'round',
+            }}
+          >
+            END
+          </text>
+        )
+      })()}
     </svg>
   )
 })
