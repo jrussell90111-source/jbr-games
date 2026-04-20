@@ -345,22 +345,6 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
         )
       })}
 
-      {/* Last space (finish) — yellow circle positioned at the head's mouth area */}
-      {(() => {
-        const colors = SPACE_COLORS[spaces[lastIdx].type] || SPACE_COLORS.white
-        const isHighlighted = highlightSpace === lastIdx
-        return (
-          <circle
-            cx={endPos.x}
-            cy={endPos.y}
-            r={BAND_WIDTH / 2}
-            fill={isHighlighted ? '#fff' : colors.fill}
-            stroke={colors.stroke}
-            strokeWidth={2}
-          />
-        )
-      })()}
-
       {/* ============ SNAKE TAIL (outside, position 0) ============ */}
       {positions[0] && (
         <SnakeTail
@@ -381,8 +365,11 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
         const offsets = playersAtPos.length === 1
           ? [{ dx: 0, dy: 0 }]
           : playersAtPos.map((_, i) => {
+              // Small offsets (3px) so tokens stay well inside the 22px
+              // band half-width even with r=11 tokens — never crosses the
+              // line between color bands. Overlap is fine per user.
               const angle = (i / playersAtPos.length) * Math.PI * 2 - Math.PI / 2
-              return { dx: Math.cos(angle) * 7, dy: Math.sin(angle) * 7 }
+              return { dx: Math.cos(angle) * 3, dy: Math.sin(angle) * 3 }
             })
         return playersAtPos.map((p, i) => {
           const isCurrent = players.indexOf(p) === currentPlayerIndex
@@ -392,7 +379,7 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
                 <circle
                   cx={mid.x + offsets[i].dx}
                   cy={mid.y + offsets[i].dy}
-                  r={19}
+                  r={14}
                   fill="none"
                   stroke={p.color}
                   strokeWidth={3}
@@ -403,7 +390,7 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
               <circle
                 cx={mid.x + offsets[i].dx}
                 cy={mid.y + offsets[i].dy}
-                r={14}
+                r={11}
                 fill={p.color}
                 stroke="#fff"
                 strokeWidth={2}
@@ -413,7 +400,7 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
                 y={mid.y + offsets[i].dy + 1}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fontSize={14}
+                fontSize={12}
                 pointerEvents="none"
               >
                 {p.emoji}
@@ -460,14 +447,14 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
             y={endPos.y}
             textAnchor="middle"
             dominantBaseline="central"
-            fill="#3a2106"
+            fill="#ffd54f"
             fontSize={10}
             fontWeight={800}
             fontFamily="sans-serif"
             pointerEvents="none"
             style={{
               paintOrder: 'stroke',
-              stroke: '#ffd54f',
+              stroke: '#3a2106',
               strokeWidth: 3,
               strokeLinejoin: 'round',
             }}
