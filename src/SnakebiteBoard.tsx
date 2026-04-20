@@ -258,7 +258,7 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
     const rad = headAngle * Math.PI / 180
     // Negative: head slides back toward body so its larger (scale 1.2)
     // outline fully covers the last band's end — no dark gap peeking through.
-    const forwardOffset = -8
+    const forwardOffset = 4
     return {
       x: last.x + Math.cos(rad) * forwardOffset,
       y: last.y + Math.sin(rad) * forwardOffset,
