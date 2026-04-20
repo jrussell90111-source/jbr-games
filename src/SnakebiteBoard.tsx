@@ -131,7 +131,7 @@ function SnakeHead({ x, y, angle }: { x: number; y: number; angle: number }) {
   // Side-view menacing snake head — dark brown to match start band.
   // Local +x is the snout direction; local -x is the neck/back.
   return (
-    <g transform={`translate(${x},${y}) rotate(${angle})`}>
+    <g transform={`translate(${x},${y}) rotate(${angle}) scale(1.2)`}>
       {/* Head shape — angular/triangular side profile, wider snout */}
       <path
         d="M-22,-14 C-16,-20 8,-22 26,-10 C30,-6 30,6 26,10 C8,22 -16,20 -22,14 Z"
@@ -256,7 +256,9 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
     if (positions.length < 2) return { x: 0, y: 0 }
     const last = positions[positions.length - 1]
     const rad = headAngle * Math.PI / 180
-    const forwardOffset = 6
+    // Negative: head slides back toward body so its larger (scale 1.2)
+    // outline fully covers the last band's end — no dark gap peeking through.
+    const forwardOffset = -8
     return {
       x: last.x + Math.cos(rad) * forwardOffset,
       y: last.y + Math.sin(rad) * forwardOffset,
@@ -319,7 +321,7 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
             fill="none"
             stroke={colors.stroke}
             strokeWidth={BORDER_WIDTH}
-            strokeLinecap="butt"
+            strokeLinecap={i === 0 ? 'round' : 'butt'}
             strokeLinejoin="round"
           />
         )
@@ -337,7 +339,10 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
             fill="none"
             stroke={isHighlighted ? '#fff' : colors.fill}
             strokeWidth={BAND_WIDTH}
-            strokeLinecap="butt"
+            // Round cap on band 0 only gives the tail end a snake-tip shape.
+            // Band 1 draws on top with butt cap, overwriting band 0's far-end
+            // round cap — only the tail-end stays visually rounded.
+            strokeLinecap={i === 0 ? 'round' : 'butt'}
             strokeLinejoin="round"
             opacity={isHighlighted ? 0.9 : 1}
             className={isHighlighted ? 'snakeband-highlight' : undefined}
