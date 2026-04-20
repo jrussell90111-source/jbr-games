@@ -263,6 +263,20 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
     }
   }, [positions, headAngle])
 
+  // END label + circle position — offset into the head's lower/mouth area
+  // so the yellow "END" reads as being on the snake's mouth rather than its
+  // back/neck. lx=4 forward of head center, ly=10 below center (lower jaw).
+  const endPos = useMemo(() => {
+    if (positions.length < 1) return { x: 0, y: 0 }
+    const rad = (headAngle * Math.PI) / 180
+    const lx = 4
+    const ly = 10
+    return {
+      x: headPos.x + lx * Math.cos(rad) - ly * Math.sin(rad),
+      y: headPos.y + lx * Math.sin(rad) + ly * Math.cos(rad),
+    }
+  }, [headPos, headAngle, positions.length])
+
   // Group players by position for offset rendering
   const playersByPosition = useMemo(() => {
     const map = new Map<number, Player[]>()
@@ -331,16 +345,14 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
         )
       })}
 
-      {/* Last space (finish) — filled circle at the last position */}
+      {/* Last space (finish) — yellow circle positioned at the head's mouth area */}
       {(() => {
-        const lastPos = positions[lastIdx]
-        if (!lastPos) return null
         const colors = SPACE_COLORS[spaces[lastIdx].type] || SPACE_COLORS.white
         const isHighlighted = highlightSpace === lastIdx
         return (
           <circle
-            cx={lastPos.x}
-            cy={lastPos.y}
+            cx={endPos.x}
+            cy={endPos.y}
             r={BAND_WIDTH / 2}
             fill={isHighlighted ? '#fff' : colors.fill}
             stroke={colors.stroke}
@@ -348,29 +360,6 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
           />
         )
       })()}
-
-      {/* START label — drawn under the head (no conflict, START is at the outer tail) */}
-      {spaces.map((space, i) => {
-        if (space.type !== 'start') return null
-        const mid = midpoints[i]
-        if (!mid) return null
-        return (
-          <text
-            key={`label-start-${i}`}
-            x={mid.x}
-            y={mid.y}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill="#fff"
-            fontSize={9}
-            fontWeight={700}
-            fontFamily="sans-serif"
-            pointerEvents="none"
-          >
-            START
-          </text>
-        )
-      })}
 
       {/* ============ SNAKE TAIL (outside, position 0) ============ */}
       {positions[0] && (
@@ -384,33 +373,6 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
       {/* ============ SNAKE HEAD (attached to END circle) ============ */}
       <SnakeHead x={headPos.x} y={headPos.y} angle={headAngle} />
 
-      {/* END label — rendered AFTER the head so it remains readable over the dark head */}
-      {(() => {
-        const lastPos = positions[lastIdx]
-        if (!lastPos) return null
-        return (
-          <text
-            x={lastPos.x}
-            y={lastPos.y}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill="#3a2106"
-            fontSize={10}
-            fontWeight={800}
-            fontFamily="sans-serif"
-            pointerEvents="none"
-            style={{
-              paintOrder: 'stroke',
-              stroke: '#ffd54f',
-              strokeWidth: 3,
-              strokeLinejoin: 'round',
-            }}
-          >
-            END
-          </text>
-        )
-      })()}
-
       {/* ============ PLAYER MARKERS ============ */}
       {Array.from(playersByPosition.entries()).map(([pos, playersAtPos]) => {
         const mid = midpoints[pos]
@@ -420,7 +382,7 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
           ? [{ dx: 0, dy: 0 }]
           : playersAtPos.map((_, i) => {
               const angle = (i / playersAtPos.length) * Math.PI * 2 - Math.PI / 2
-              return { dx: Math.cos(angle) * 10, dy: Math.sin(angle) * 10 }
+              return { dx: Math.cos(angle) * 7, dy: Math.sin(angle) * 7 }
             })
         return playersAtPos.map((p, i) => {
           const isCurrent = players.indexOf(p) === currentPlayerIndex
@@ -430,7 +392,7 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
                 <circle
                   cx={mid.x + offsets[i].dx}
                   cy={mid.y + offsets[i].dy}
-                  r={22}
+                  r={19}
                   fill="none"
                   stroke={p.color}
                   strokeWidth={3}
@@ -460,6 +422,60 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
           )
         })
       })}
+      {/* START + END labels — rendered AFTER player tokens so they always sit on top */}
+      {/* START label — rendered AFTER tail so it sits on top, yellow to match END */}
+      {spaces.map((space, i) => {
+        if (space.type !== 'start') return null
+        const mid = midpoints[i]
+        if (!mid) return null
+        return (
+          <text
+            key={`label-start-${i}`}
+            x={mid.x}
+            y={mid.y}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="#ffd54f"
+            fontSize={10}
+            fontWeight={800}
+            fontFamily="sans-serif"
+            pointerEvents="none"
+            style={{
+              paintOrder: 'stroke',
+              stroke: '#3a2106',
+              strokeWidth: 3,
+              strokeLinejoin: 'round',
+            }}
+          >
+            START
+          </text>
+        )
+      })}
+
+      {/* END label — rendered AFTER the head, positioned at the head's mouth level */}
+      {(() => {
+        return (
+          <text
+            x={endPos.x}
+            y={endPos.y}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="#3a2106"
+            fontSize={10}
+            fontWeight={800}
+            fontFamily="sans-serif"
+            pointerEvents="none"
+            style={{
+              paintOrder: 'stroke',
+              stroke: '#ffd54f',
+              strokeWidth: 3,
+              strokeLinejoin: 'round',
+            }}
+          >
+            END
+          </text>
+        )
+      })()}
     </svg>
   )
 })
