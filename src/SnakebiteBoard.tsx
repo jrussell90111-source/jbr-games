@@ -319,7 +319,7 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
             fill="none"
             stroke={colors.stroke}
             strokeWidth={BORDER_WIDTH}
-            strokeLinecap="round"
+            strokeLinecap="butt"
             strokeLinejoin="round"
           />
         )
@@ -337,7 +337,7 @@ const SnakebiteBoard = React.memo(function SnakebiteBoard({
             fill="none"
             stroke={isHighlighted ? '#fff' : colors.fill}
             strokeWidth={BAND_WIDTH}
-            strokeLinecap="round"
+            strokeLinecap="butt"
             strokeLinejoin="round"
             opacity={isHighlighted ? 0.9 : 1}
             className={isHighlighted ? 'snakeband-highlight' : undefined}
