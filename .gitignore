@@ -19,3 +19,9 @@ pnpm-debug.log*
 src/*.sav
 src/*.sav[0-9]
 src/*.sav[0-9][0-9]
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# patch/merge leftovers
+*.orig
